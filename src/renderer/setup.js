@@ -10,6 +10,13 @@ const logBox = $("#log");
 const STEP_WEIGHT = { node: 0.35, deps: 0.5, verify: 0.15 };
 const STEP_ORDER = ["node", "deps", "verify"];
 
+/** Plain-language stage text, so the main line never shows raw npm output. */
+const STEP_TEXT = {
+	node: "正在准备运行环境…",
+	deps: "正在安装 OpenContext…",
+	verify: "正在做最后检查…",
+};
+
 function appendLog(text) {
 	const atBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
 	logBox.textContent += `${text}\n`;
@@ -90,7 +97,11 @@ api.on.installProgress((progress) => {
 	}
 	markStep(progress.step, progress.status, progress.percent, progress.message);
 	updateTotal(progress.step, progress.percent);
-	setState("busy", "正在安装，请不要关闭窗口…", progress.message);
+	setState(
+		"busy",
+		"正在安装，请不要关闭窗口…",
+		STEP_TEXT[progress.step] ?? "正在安装…",
+	);
 	appendLog(`[${progress.step}] ${progress.message}`);
 });
 
