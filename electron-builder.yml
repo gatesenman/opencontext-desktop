@@ -1,0 +1,61 @@
+appId: com.gaosichun.opencontext.desktop
+productName: OpenContext Desktop
+copyright: Copyright © 2026 gaosichun
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - package.json
+  - src/**/*
+  - "!**/*.map"
+
+asar: true
+# The offline keyword search helper is spawned with the managed Node.js, which
+# cannot read files inside the asar archive.
+asarUnpack:
+  - src/main/scripts/**
+compression: normal
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: gatesenman
+  repo: opencontext-desktop
+  releaseType: release
+
+linux:
+  icon: build/icon.png
+  category: Utility
+  synopsis: OpenContext agentic context runtime, on the desktop
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OpenContext Desktop
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  extendInfo:
+    LSMinimumSystemVersion: "11.0"

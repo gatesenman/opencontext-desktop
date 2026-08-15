@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; frame-src http: https:"
+		/>
+		<title>OpenContext Desktop</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<div class="shell">
+			<aside class="side">
+				<div class="title">
+					<span>OpenContext</span>
+					<span class="muted mono" id="sideVersion">v—</span>
+				</div>
+				<button class="nav active" data-view="home">首页</button>
+				<button class="nav" data-view="help">使用帮助</button>
+				<button class="nav" data-view="settings">设置</button>
+				<button class="nav" data-view="about">关于与更新</button>
+
+				<button class="nav toggle" id="btnAdvanced">高级功能 ▾</button>
+				<div id="advNav" hidden>
+					<button class="nav sub" data-view="overview">服务状态</button>
+					<button class="nav sub" data-view="api">接口调试</button>
+					<button class="nav sub" data-view="embed">内嵌页面</button>
+					<button class="nav sub" data-view="logs">运行日志</button>
+				</div>
+
+				<div class="foot">
+					<div class="row">
+						<span class="dot" id="sideDot"></span>
+						<span id="sideStatus">未启动</span>
+					</div>
+					<div class="mono" id="sideUrl"></div>
+				</div>
+			</aside>
+
+			<main class="main">
+				<!-- 首页：小白模式 -->
+				<section class="view active" id="view-home">
+					<div class="banner card" id="banner">
+						<span class="dot big" id="hDot"></span>
+						<div class="stack tight">
+							<strong id="hTitle">正在检查服务…</strong>
+							<span class="muted" id="hHint">稍等一下，桌面端正在启动本地服务。</span>
+						</div>
+						<div class="row" style="margin-left: auto">
+							<button class="primary" id="hFix" hidden>启动服务</button>
+							<button id="hDetailToggle">技术详情</button>
+						</div>
+					</div>
+					<dl class="kv" id="hDetail" hidden style="margin: 12px 2px 0"></dl>
+
+					<div class="card stack" style="margin-top: 16px">
+						<div class="row" style="justify-content: space-between">
+							<strong>① 记一条</strong>
+							<span class="muted">想让它记住的任何事，写下来就行</span>
+						</div>
+						<textarea id="noteText" class="plain" placeholder="例如：我家路由器管理密码是 admin888；孩子的钢琴课每周六上午十点。"></textarea>
+						<div class="row">
+							<span class="field" style="flex: 1; margin: 0; max-width: 260px">
+								<input id="noteTag" placeholder="分类标签（可留空，如 生活 / 工作）" />
+							</span>
+							<button class="primary big" id="btnSave">记住它</button>
+							<span id="saveHint" class="muted"></span>
+						</div>
+					</div>
+
+					<div class="card stack" style="margin-top: 14px">
+						<div class="row" style="justify-content: space-between">
+							<strong>② 搜一下</strong>
+							<span class="muted" id="searchMode"></span>
+						</div>
+						<div class="row">
+							<span class="field" style="flex: 1; margin: 0">
+								<input id="searchText" placeholder="用一句话或几个关键词提问，例如：路由器密码" />
+							</span>
+							<button class="primary big" id="btnSearch">搜索</button>
+						</div>
+						<div id="searchResults" class="results">
+							<div class="empty">还没有搜索，试试上面的输入框。</div>
+						</div>
+					</div>
+
+					<div class="card stack" style="margin-top: 14px">
+						<div class="row" style="justify-content: space-between">
+							<strong>最近记住的</strong>
+							<div class="row">
+								<span class="pill" id="totalPill">共 0 条</span>
+								<button id="btnRefreshRecent">刷新</button>
+							</div>
+						</div>
+						<div id="recentList" class="results"><div class="empty">还没有任何记录。</div></div>
+					</div>
+				</section>
+
+				<!-- 使用帮助 -->
+				<section class="view" id="view-help">
+					<h2>使用帮助</h2>
+					<div class="sub">三步就能用起来：写下来 → 搜出来 → 需要时给 AI 用。</div>
+					<div class="card stack">
+						<strong>它是什么？</strong>
+						<div class="muted">
+							OpenContext 是一个只跑在你自己电脑上的“记忆库”。桌面端已经帮你装好运行环境并自动启动服务，你只需要在首页记录和搜索。
+						</div>
+						<strong>常见问题</strong>
+						<details>
+							<summary>为什么搜不到我刚写的东西？</summary>
+							<div class="muted">
+								默认使用关键词搜索，需要包含相同的词。想按“意思”搜索，可在设置里打开智能搜索（首次会下载约 90MB 的本地模型，之后完全离线）。
+							</div>
+						</details>
+						<details>
+							<summary>我的数据存在哪里？会上传吗？</summary>
+							<div class="muted">
+								全部保存在本机数据目录的 SQLite 文件里，服务只监听 127.0.0.1，不会上传到任何服务器。备份就是复制数据目录。
+							</div>
+						</details>
+						<details>
+							<summary>提示服务未运行怎么办？</summary>
+							<div class="muted">在首页点“启动服务”即可；如果仍失败，去“高级功能 → 运行日志”看最后几行，或在设置里点“重新安装运行环境”。</div>
+						</details>
+						<details>
+							<summary>端口被别的软件占用了？</summary>
+							<div class="muted">不用管，桌面端会自动往后找一个空闲端口；也可以在设置里改成别的端口。</div>
+						</details>
+						<details>
+							<summary>怎么让 AI 工具用上这些记忆？</summary>
+							<div class="muted">
+								服务提供本地 HTTP 接口（/v1/search 等），支持 MCP 的客户端可以直接接入；接口地址显示在首页“技术详情”里。
+							</div>
+						</details>
+						<div class="row">
+							<button id="btnHelpData">打开数据目录</button>
+							<button id="btnHelpLogs">打开日志目录</button>
+							<button id="btnHelpRepo">项目主页</button>
+						</div>
+					</div>
+				</section>
+
+				<!-- 设置 -->
+				<section class="view" id="view-settings">
+					<h2>设置</h2>
+					<div class="sub">常用开关放在上面，其余保持默认就好。</div>
+					<div class="card stack">
+						<div class="grid-2">
+							<div class="field"><label>你的名字（用于区分记忆归属）</label><input id="cfUser" /></div>
+							<div class="field">
+								<label>搜索方式</label>
+								<select id="cfEmbedding">
+									<option value="none">关键词搜索（默认，零配置、完全离线）</option>
+									<option value="local">智能搜索（首次下载约 90MB 本地模型）</option>
+									<option value="openrouter">云端模型（需自备 API Key 环境变量）</option>
+								</select>
+							</div>
+						</div>
+						<label class="check"><input type="checkbox" id="cfAutoStart" /> 打开应用时自动启动服务（推荐）</label>
+						<label class="check"><input type="checkbox" id="cfAutoUpdate" /> 自动检查并下载新版本（推荐）</label>
+						<div class="row">
+							<button class="primary" id="btnSaveSettings">保存</button>
+							<button id="btnSaveRestart">保存并重启服务</button>
+							<button id="btnOpenData">打开数据目录</button>
+							<span class="muted" id="settingsHint"></span>
+						</div>
+
+						<details class="adv">
+							<summary>高级设置（不懂就别改）</summary>
+							<div class="grid-2" style="margin-top: 12px">
+								<div class="field"><label>监听地址</label><input id="cfHost" /></div>
+								<div class="field"><label>端口（被占用时自动顺延）</label><input id="cfPort" type="number" /></div>
+								<div class="field">
+									<label>记忆后端</label>
+									<select id="cfMemory">
+										<option value="sqlite-vec">sqlite-vec</option>
+										<option value="chroma">chroma</option>
+										<option value="none">none</option>
+									</select>
+								</div>
+								<div class="field">
+									<label>洞察后端</label>
+									<select id="cfInsights">
+										<option value="none">none</option>
+										<option value="sqlite-vec">sqlite-vec</option>
+										<option value="chroma">chroma</option>
+									</select>
+								</div>
+								<div class="field">
+									<label>知识库后端</label>
+									<select id="cfKnowledge">
+										<option value="none">none</option>
+										<option value="chroma">chroma</option>
+									</select>
+								</div>
+								<div class="field"><label>Chroma 地址</label><input id="cfChroma" placeholder="http://127.0.0.1:8000" /></div>
+								<div class="field"><label>嵌入模型名</label><input id="cfEmbedModel" placeholder="留空使用默认" /></div>
+								<div class="field"><label>npm 源</label><input id="cfRegistry" placeholder="https://registry.npmjs.org" /></div>
+								<div class="field"><label>Node.js 下载源</label><input id="cfNodeMirror" /></div>
+								<div class="field"><label>运行时版本标签</label><input id="cfChannel" placeholder="latest 或具体版本号" /></div>
+								<div class="field"><label>内嵌页面地址</label><input id="cfEmbedUrl" placeholder="留空则内嵌本地服务地址" /></div>
+							</div>
+							<div class="row">
+								<button id="btnReinstall">重新安装运行环境</button>
+								<button id="btnOpenLogsDir">打开日志目录</button>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- 关于 -->
+				<section class="view" id="view-about">
+					<h2>关于与更新</h2>
+					<div class="sub">通过 GitHub Releases 分发，发现新版本可一键更新。</div>
+					<div class="card stack">
+						<div class="bar"><i id="upBar"></i></div>
+						<div class="row">
+							<span class="pill"><span class="dot" id="upDot"></span><span id="upStatus">未检查</span></span>
+							<button id="btnCheckUpdate">检查更新</button>
+							<button id="btnDownloadUpdate" hidden>下载更新</button>
+							<button class="primary" id="btnInstallUpdate" hidden>重启并安装</button>
+							<button id="btnRepo">项目主页</button>
+						</div>
+						<div class="muted mono" id="upDetail"></div>
+						<dl class="kv" id="aboutInfo"></dl>
+					</div>
+				</section>
+
+				<!-- 高级：服务状态 -->
+				<section class="view" id="view-overview">
+					<h2>服务状态</h2>
+					<div class="sub">本地 OpenContext 服务进程状态与运行参数。</div>
+					<div class="card stack">
+						<div class="row" style="justify-content: space-between">
+							<div class="row">
+								<span class="dot" id="ovDot"></span>
+								<strong id="ovStatus">未启动</strong>
+								<span class="muted mono" id="ovUrl"></span>
+							</div>
+							<div class="row">
+								<button id="btnStart">启动</button>
+								<button id="btnStop">停止</button>
+								<button id="btnRestart">重启</button>
+								<button id="btnHealth">健康检查</button>
+							</div>
+						</div>
+						<div id="ovError" class="mono" style="color: var(--fail)"></div>
+						<dl class="kv" id="ovInfo"></dl>
+						<div class="log" id="ovOut" style="height: 140px"></div>
+					</div>
+				</section>
+
+				<!-- 高级：接口调试 -->
+				<section class="view" id="view-api">
+					<h2>接口调试</h2>
+					<div class="sub">直接调用本地服务接口：写入原始消息、统一检索、按 messageId 查询。</div>
+					<div class="card stack">
+						<div class="grid-2">
+							<div class="field"><label>userId</label><input id="mUser" value="me" /></div>
+							<div class="field"><label>messageId（留空自动生成）</label><input id="mId" /></div>
+							<div class="field"><label>platform</label><input id="mPlatform" value="desktop" /></div>
+							<div class="field"><label>botId</label><input id="mBot" value="desktop" /></div>
+						</div>
+						<div class="field">
+							<label>内容</label>
+							<textarea id="mContent">用户偏好深色模式，并且希望所有工具默认使用简体中文。</textarea>
+						</div>
+						<div class="row">
+							<label class="check"><input type="checkbox" id="mEmbed" /> 服务端自动向量化（需启用嵌入模型）</label>
+							<button class="primary" id="btnStore">POST /v1/raw-messages</button>
+						</div>
+						<div class="row">
+							<span class="field" style="flex: 1; margin: 0"><input id="sQuery" value="用户有什么偏好？" /></span>
+							<span class="field" style="width: 90px; margin: 0"><input id="sLimit" type="number" value="5" /></span>
+							<button id="btnSearchApi">POST /v1/search</button>
+						</div>
+						<div class="row">
+							<span class="field" style="flex: 1; margin: 0"><input id="sMessageId" placeholder="messageId" /></span>
+							<button id="btnGetMessage">GET /v1/raw-messages/:id</button>
+						</div>
+						<div class="log" id="apiOut" style="height: 220px"></div>
+					</div>
+				</section>
+
+				<!-- 高级：内嵌页面 -->
+				<section class="view" id="view-embed">
+					<h2>内嵌页面</h2>
+					<div class="sub">在应用内打开本地服务地址，也可以换成任意自建前端地址。</div>
+					<div class="card stack">
+						<div class="row">
+							<span class="field" style="flex: 1; margin: 0"><input id="eUrl" /></span>
+							<button id="btnLoadEmbed">加载</button>
+							<button id="btnSaveEmbed">保存为默认</button>
+							<button id="btnOpenBrowser">用浏览器打开</button>
+						</div>
+						<iframe id="embedFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+					</div>
+				</section>
+
+				<!-- 高级：日志 -->
+				<section class="view" id="view-logs">
+					<h2>运行日志</h2>
+					<div class="sub">服务进程与桌面端自身的日志，也会写入日志目录。</div>
+					<div class="card stack">
+						<div class="row">
+							<button id="btnOpenLogs">打开日志目录</button>
+							<button id="btnClearLogs">清空视图</button>
+						</div>
+						<div class="log" id="logBox" style="height: 52vh"></div>
+					</div>
+				</section>
+			</main>
+		</div>
+		<script src="dashboard.js"></script>
+	</body>
+</html>

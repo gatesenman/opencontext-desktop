@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+		/>
+		<title>OpenContext Desktop — 首次启动</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<div class="setup">
+			<div class="brand">
+				<h1>欢迎使用 OpenContext</h1>
+				<span class="pill" id="appVersion">v—</span>
+			</div>
+			<p class="muted" id="intro">
+				第一次打开需要装一次运行环境，全程自动，只要点一下按钮。装好之后每次打开就会直接进入主界面，
+				所有内容都只保存在这台电脑上。
+			</p>
+
+			<div class="card stack" style="margin-top: 18px">
+				<div class="row">
+					<span class="dot busy" id="stateDot"></span>
+					<strong id="stateText">正在检查电脑环境…</strong>
+				</div>
+				<div class="row">
+					<button id="install" class="primary big" disabled>一键安装并开始使用</button>
+					<button id="enter" class="primary big" hidden>开始使用</button>
+					<button id="recheck">重新检查</button>
+				</div>
+				<div class="bar"><i id="totalBar"></i></div>
+				<div class="muted" id="stageText">安装大约需要 1–3 分钟，取决于网络速度。</div>
+
+				<details id="checkDetails">
+					<summary>查看检查详情</summary>
+					<ul class="checklist" id="checklist">
+						<li><span class="dot busy"></span><span class="label">正在检查…</span></li>
+					</ul>
+				</details>
+
+				<details id="progressDetails" hidden>
+					<summary>查看安装过程（出问题时把这里的内容发给开发者）</summary>
+					<div class="steps" style="margin: 12px 0 14px">
+						<div class="step" data-step="node">
+							<span class="dot"></span>
+							<div>
+								<div><strong>准备运行环境</strong> <span class="muted" data-msg>等待中</span></div>
+								<div class="bar" style="margin-top: 6px"><i></i></div>
+							</div>
+						</div>
+						<div class="step" data-step="deps">
+							<span class="dot"></span>
+							<div>
+								<div><strong>下载 OpenContext</strong> <span class="muted" data-msg>等待中</span></div>
+								<div class="bar" style="margin-top: 6px"><i></i></div>
+							</div>
+						</div>
+						<div class="step" data-step="verify">
+							<span class="dot"></span>
+							<div>
+								<div><strong>启动并自检</strong> <span class="muted" data-msg>等待中</span></div>
+								<div class="bar" style="margin-top: 6px"><i></i></div>
+							</div>
+						</div>
+					</div>
+					<div class="log" id="log"></div>
+				</details>
+			</div>
+
+			<p class="muted mono" id="dataDir" style="margin-top: 14px"></p>
+		</div>
+		<script src="setup.js"></script>
+	</body>
+</html>

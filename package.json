@@ -1,0 +1,34 @@
+{
+  "name": "opencontext-desktop",
+  "productName": "OpenContext Desktop",
+  "version": "1.0.0",
+  "description": "Desktop shell for the OpenContext agentic context runtime: first-run environment detection, automatic runtime install, embedded control panel and in-app updates.",
+  "main": "src/main/index.js",
+  "author": {
+    "name": "gaosichun",
+    "email": "gaosichun@hotmail.com"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/gatesenman/opencontext-desktop",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gatesenman/opencontext-desktop.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "release": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9",
+    "tar-fs": "3.0.6",
+    "yauzl": "3.1.3"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  }
+}
