@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld("opencontext", {
 		remove: (id) => ipcRenderer.invoke("memory:delete", id),
 		restore: (id) => ipcRenderer.invoke("memory:restore", id),
 		export: (format) => ipcRenderer.invoke("memory:export", format),
+		browse: (payload) => ipcRenderer.invoke("memory:browse", payload),
+		tags: () => ipcRenderer.invoke("memory:tags"),
+		stats: (days) => ipcRenderer.invoke("memory:stats", days),
 	},
 	quick: {
 		show: () => ipcRenderer.invoke("quick:show"),

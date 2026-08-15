@@ -12,15 +12,20 @@
 	<body class="quick">
 		<div class="quick-head">
 			<strong>快速记一条</strong>
-			<span class="muted">Ctrl+Enter 保存 · Esc 关闭</span>
+			<div class="row">
+				<button class="link" id="qPreview">预览</button>
+				<span class="muted">Ctrl+Enter 保存 · Esc 关闭</span>
+			</div>
 		</div>
-		<textarea id="qText" class="plain" placeholder="现在想记住什么？写完按 Ctrl+Enter 就行。"></textarea>
+		<textarea id="qText" class="plain" placeholder="现在想记住什么？支持 Markdown，写完按 Ctrl+Enter 就行。"></textarea>
+		<div id="qMd" class="md preview" hidden></div>
 		<div class="row">
 			<span class="field grow"><input id="qTag" placeholder="标签（可留空）" /></span>
 			<button class="primary" id="qSave">记住它</button>
 			<button id="qClose">关闭</button>
 		</div>
 		<div class="muted" id="qHint"></div>
+		<script src="markdown.js"></script>
 		<script src="quick.js"></script>
 	</body>
 </html>

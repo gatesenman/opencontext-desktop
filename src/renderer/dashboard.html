@@ -17,6 +17,7 @@
 					<span class="muted mono" id="sideVersion">v—</span>
 				</div>
 				<button class="nav active" data-view="home">首页</button>
+				<button class="nav" data-view="library">记忆库</button>
 				<button class="nav" data-view="help">使用帮助</button>
 				<button class="nav" data-view="settings">设置</button>
 				<button class="nav" data-view="about">关于与更新</button>
@@ -58,9 +59,16 @@
 					<div class="card stack">
 						<div class="row between">
 							<strong class="sec"><span class="badge">1</span>记一条</strong>
-							<span class="muted">想让它记住的任何事，写下来就行</span>
+							<div class="row">
+								<span class="muted">支持 Markdown</span>
+								<div class="tabs" id="noteTabs">
+									<button class="tab active" data-mode="edit">编辑</button>
+									<button class="tab" data-mode="preview">预览</button>
+								</div>
+							</div>
 						</div>
-						<textarea id="noteText" class="plain" placeholder="例如：我家路由器管理密码是 admin888；孩子的钢琴课每周六上午十点。"></textarea>
+						<textarea id="noteText" class="plain" placeholder="例如：我家路由器管理密码是 admin888；孩子的钢琴课每周六上午十点。支持 **加粗**、列表、`代码` 等 Markdown 写法。"></textarea>
+						<div id="notePreview" class="md preview" hidden></div>
 						<div class="row">
 							<span class="field grow cap">
 								<input id="noteTag" placeholder="分类标签（可留空，如 生活 / 工作）" />
@@ -112,6 +120,51 @@
 							<button id="btnCopySearch">复制检索示例</button>
 							<button id="btnCopyWrite">复制写入示例</button>
 							<button id="btnOpenService">用浏览器打开</button>
+						</div>
+					</div>
+				</section>
+
+				<!-- 记忆库 -->
+				<section class="view" id="view-library">
+					<h2>记忆库</h2>
+					<div class="sub">所有记住的内容都在这里，可以按标签筛选、翻页浏览。</div>
+
+					<div class="stat-grid">
+						<div class="card stat"><span class="num" id="stTotal">—</span><span class="muted">共记住</span></div>
+						<div class="card stat"><span class="num" id="stWeek">—</span><span class="muted">最近 7 天新增</span></div>
+						<div class="card stat"><span class="num" id="stTags">—</span><span class="muted">使用中的标签</span></div>
+						<div class="card stat"><span class="num" id="stSince">—</span><span class="muted">第一条记录</span></div>
+					</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">最近 14 天记录趋势</strong>
+							<span class="muted" id="chartHint"></span>
+						</div>
+						<div class="chart" id="dayChart"></div>
+						<div class="tagbar" id="tagChart"></div>
+					</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">全部记录</strong>
+							<div class="row">
+								<select id="libTag"><option value="">全部标签</option></select>
+								<select id="libOrder">
+									<option value="desc">最新在前</option>
+									<option value="asc">最早在前</option>
+								</select>
+								<button id="libRefresh">刷新</button>
+							</div>
+						</div>
+						<div id="libList" class="results"><div class="empty">正在读取…</div></div>
+						<div class="row between">
+							<span class="muted" id="libHint"></span>
+							<div class="row">
+								<button id="libPrev">上一页</button>
+								<span class="muted" id="libPage">—</span>
+								<button id="libNext">下一页</button>
+							</div>
 						</div>
 					</div>
 				</section>
@@ -351,6 +404,7 @@
 				</section>
 			</main>
 		</div>
+		<script src="markdown.js"></script>
 		<script src="dashboard.js"></script>
 	</body>
 </html>

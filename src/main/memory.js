@@ -164,4 +164,20 @@ async function all() {
 	return local.items;
 }
 
-module.exports = { save, search, recent, count, remove, restore, all, userId };
+/** Paginated library view with optional tag filter. */
+async function browse({ offset = 0, limit = 20, tag = "", order = "desc" } = {}) {
+	const local = await runLocal("browse", { offset, limit, tag, order });
+	return { items: local.items, total: local.total };
+}
+
+async function tags() {
+	const local = await runLocal("tags");
+	return local.items;
+}
+
+async function stats(days = 14) {
+	const local = await runLocal("stats", { days });
+	return { total: local.total, first: local.first, days: local.days, byDay: local.byDay, byTag: local.byTag };
+}
+
+module.exports = { save, search, recent, count, remove, restore, all, browse, tags, stats, userId };

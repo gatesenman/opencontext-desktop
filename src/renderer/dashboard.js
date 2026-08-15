@@ -117,14 +117,21 @@ function highlightTerms(query) {
 	return [...new Set([...latin, ...grams])].sort((a, b) => b.length - a.length).slice(0, 24);
 }
 
-/** Highlights on already escaped text, so user content can never inject markup. */
-function highlight(content, terms) {
-	let html = escapeHtml(content);
-	for (const term of terms) {
-		const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		html = html.replace(new RegExp(pattern, "gi"), (match) => `<mark>${match}</mark>`);
+/** Wraps matched terms in <mark> without touching the rendered markup. */
+function highlightNode(root, terms) {
+	if (terms.length === 0) return;
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const nodes = [];
+	while (walker.nextNode()) nodes.push(walker.currentNode);
+	const pattern = new RegExp(terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+	for (const node of nodes) {
+		pattern.lastIndex = 0;
+		if (!pattern.test(node.textContent)) continue;
+		pattern.lastIndex = 0;
+		const span = document.createElement("span");
+		span.innerHTML = escapeHtml(node.textContent).replace(pattern, (match) => `<mark>${match}</mark>`);
+		node.replaceWith(...span.childNodes);
 	}
-	return html;
 }
 
 function renderResults(target, items, emptyText, query = "") {
@@ -134,19 +141,27 @@ function renderResults(target, items, emptyText, query = "") {
 		return;
 	}
 	const terms = highlightTerms(query);
-	box.innerHTML = items
-		.map(
-			(item) => `<article class="result">
-				<p>${highlight(item.content, terms)}</p>
-				<footer class="muted">
-					<span>${escapeHtml(timeAgo(item.ts))}</span>
-					${item.score !== undefined ? `<span>匹配度 ${escapeHtml(item.score)}</span>` : ""}
-					<button class="link" data-copy="${escapeHtml(item.id)}">复制</button>
-					<button class="link danger" data-delete="${escapeHtml(item.id)}">删除</button>
-				</footer>
-			</article>`,
-		)
-		.join("");
+	box.innerHTML = "";
+	for (const item of items) {
+		const card = document.createElement("article");
+		card.className = "result";
+		card.dataset.raw = item.content ?? "";
+		const body = document.createElement("div");
+		body.className = "md";
+		body.innerHTML = window.renderMarkdown(item.content);
+		highlightNode(body, terms);
+		card.appendChild(body);
+		const footer = document.createElement("footer");
+		footer.className = "muted";
+		footer.innerHTML = `
+			<span>${escapeHtml(timeAgo(item.ts))}</span>
+			${item.tag ? `<span class="tagpill">${escapeHtml(item.tag)}</span>` : ""}
+			${item.score !== undefined ? `<span>匹配度 ${escapeHtml(item.score)}</span>` : ""}
+			<button class="link" data-copy="${escapeHtml(item.id)}">复制</button>
+			<button class="link danger" data-delete="${escapeHtml(item.id)}">删除</button>`;
+		card.appendChild(footer);
+		box.appendChild(card);
+	}
 }
 
 /** One delegated handler covers both the search results and the recent list. */
@@ -155,7 +170,7 @@ async function onResultAction(event) {
 	const deleteId = event.target.dataset?.delete;
 	if (!copyId && !deleteId) return;
 	const card = event.target.closest(".result");
-	const text = card?.querySelector("p")?.textContent ?? "";
+	const text = card?.dataset.raw ?? card?.textContent ?? "";
 
 	if (copyId) {
 		await api.clipboard.write(text);
@@ -172,6 +187,7 @@ async function onResultAction(event) {
 		card?.remove();
 		offerUndo(deleteId);
 		await refreshRecent();
+		if ($("#view-library").classList.contains("active")) await loadLibrary();
 	} catch (error) {
 		$("#listHint").textContent = `删除失败：${reason(error)}`;
 		event.target.disabled = false;
@@ -346,6 +362,97 @@ function switchView(name) {
 	}
 	if (name === "embed") loadEmbed();
 	if (name === "home") refreshRecent();
+	if (name === "library") refreshLibrary();
+}
+
+/* ── 记忆库 ───────────────────────────────────────── */
+
+const PAGE_SIZE = 20;
+const library = { page: 0, total: 0 };
+
+async function loadLibrary() {
+	try {
+		const { items, total } = await api.memory.browse({
+			offset: library.page * PAGE_SIZE,
+			limit: PAGE_SIZE,
+			tag: $("#libTag").value,
+			order: $("#libOrder").value,
+		});
+		library.total = total;
+		const pages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+		if (library.page >= pages) {
+			library.page = pages - 1;
+			return loadLibrary();
+		}
+		renderResults("#libList", items, "这里还没有记录，去首页写一条试试。");
+		$("#libPage").textContent = `第 ${library.page + 1} / ${pages} 页 · 共 ${total} 条`;
+		$("#libPrev").disabled = library.page === 0;
+		$("#libNext").disabled = library.page >= pages - 1;
+	} catch (error) {
+		renderResults("#libList", [], `读取失败：${reason(error)}`);
+	}
+}
+
+async function loadTags() {
+	try {
+		const current = $("#libTag").value;
+		const tags = await api.memory.tags();
+		$("#libTag").innerHTML =
+			'<option value="">全部标签</option>' +
+			tags.map((entry) => `<option value="${escapeHtml(entry.tag)}">${escapeHtml(entry.tag)}（${entry.total}）</option>`).join("");
+		if ([...$("#libTag").options].some((option) => option.value === current)) $("#libTag").value = current;
+	} catch {
+		/* tags are decoration; the list still works without them */
+	}
+}
+
+async function loadStats() {
+	try {
+		const stats = await api.memory.stats(14);
+		$("#stTotal").textContent = stats.total;
+		$("#stTags").textContent = stats.byTag.filter((entry) => entry.tag !== "未分类").length;
+		$("#stSince").textContent = stats.first ? new Date(stats.first).toLocaleDateString() : "—";
+
+		const byDay = new Map(stats.byDay.map((entry) => [entry.day, entry.total]));
+		const days = [];
+		for (let i = 13; i >= 0; i -= 1) {
+			const date = new Date(Date.now() - i * 86_400_000);
+			const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+			days.push({ key, label: `${date.getMonth() + 1}/${date.getDate()}`, total: byDay.get(key) ?? 0 });
+		}
+		$("#stWeek").textContent = days.slice(-7).reduce((sum, day) => sum + day.total, 0);
+
+		const peak = Math.max(...days.map((day) => day.total), 1);
+		$("#dayChart").innerHTML = days
+			.map(
+				(day) => `<div class="col" title="${day.label}：${day.total} 条">
+					<span class="val">${day.total || ""}</span>
+					<i style="height:${Math.max((day.total / peak) * 100, day.total > 0 ? 6 : 2)}%"></i>
+					<span class="lab">${day.label}</span>
+				</div>`,
+			)
+			.join("");
+
+		const tagPeak = Math.max(...stats.byTag.map((entry) => entry.total), 1);
+		$("#tagChart").innerHTML = stats.byTag
+			.map(
+				(entry) => `<div class="tagrow">
+					<span class="name">${escapeHtml(entry.tag)}</span>
+					<span class="track"><i style="width:${(entry.total / tagPeak) * 100}%"></i></span>
+					<span class="muted">${entry.total}</span>
+				</div>`,
+			)
+			.join("");
+		$("#chartHint").textContent = "";
+	} catch (error) {
+		$("#chartHint").textContent = `统计读取失败：${reason(error)}`;
+	}
+}
+
+function refreshLibrary() {
+	loadStats();
+	loadTags();
+	loadLibrary();
 }
 
 function embedTarget() {
@@ -391,6 +498,7 @@ $("#btnSave").addEventListener("click", async () => {
 	try {
 		const saved = await api.memory.save({ text: $("#noteText").value, tag: $("#noteTag").value });
 		$("#noteText").value = "";
+		$("#notePreview").innerHTML = "";
 		$("#saveHint").textContent = `已记住 ✓ ${timeAgo(saved.ts)}`;
 		await refreshRecent();
 	} catch (error) {
@@ -420,6 +528,41 @@ async function doSearch() {
 		button.disabled = false;
 	}
 }
+
+/** 编辑 / 预览切换（记一条） */
+$("#noteTabs").addEventListener("click", (event) => {
+	const mode = event.target.dataset?.mode;
+	if (!mode) return;
+	for (const tab of document.querySelectorAll("#noteTabs .tab")) {
+		tab.classList.toggle("active", tab.dataset.mode === mode);
+	}
+	const preview = mode === "preview";
+	$("#noteText").hidden = preview;
+	$("#notePreview").hidden = !preview;
+	if (preview) {
+		const text = $("#noteText").value.trim();
+		$("#notePreview").innerHTML = text ? window.renderMarkdown(text) : '<span class="muted">先在编辑模式写点内容，再切过来看效果。</span>';
+	}
+});
+
+$("#libList").addEventListener("click", onResultAction);
+$("#libPrev").addEventListener("click", () => {
+	library.page = Math.max(library.page - 1, 0);
+	loadLibrary();
+});
+$("#libNext").addEventListener("click", () => {
+	library.page += 1;
+	loadLibrary();
+});
+$("#libTag").addEventListener("change", () => {
+	library.page = 0;
+	loadLibrary();
+});
+$("#libOrder").addEventListener("change", () => {
+	library.page = 0;
+	loadLibrary();
+});
+$("#libRefresh").addEventListener("click", refreshLibrary);
 
 $("#btnSearch").addEventListener("click", doSearch);
 $("#searchText").addEventListener("keydown", (event) => {
@@ -546,7 +689,10 @@ api.on.daemonStatus(renderStatus);
 api.on.daemonLog((entry) => appendLogLine($("#logBox"), entry));
 api.on.appLog((entry) => appendLogLine($("#logBox"), entry));
 api.on.updateStatus(renderUpdate);
-api.on.memoryChanged(() => refreshRecent());
+api.on.memoryChanged(() => {
+	refreshRecent();
+	if ($("#view-library").classList.contains("active")) refreshLibrary();
+});
 
 (async () => {
 	try {

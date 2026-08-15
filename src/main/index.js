@@ -205,6 +205,9 @@ function registerIpc() {
 		return result;
 	});
 	ipcMain.handle("memory:export", (_event, format) => exportNotes(format));
+	ipcMain.handle("memory:browse", (_event, payload) => memory.browse(payload ?? {}));
+	ipcMain.handle("memory:tags", () => memory.tags());
+	ipcMain.handle("memory:stats", (_event, days) => memory.stats(days));
 
 	ipcMain.handle("settings:get", () => config.settings);
 	ipcMain.handle("settings:save", async (_event, patch) => {
