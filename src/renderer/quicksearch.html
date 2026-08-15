@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN" class="quick">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+		/>
+		<title>查询记忆</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body class="quick qsearch">
+		<div class="quick-head">
+			<strong>查询记忆</strong>
+			<span class="muted">Enter 搜索 · Esc 关闭</span>
+		</div>
+		<div class="row">
+			<span class="field grow"><input id="qsText" placeholder="想找什么？输入关键词按 Enter。" /></span>
+			<button class="primary" id="qsGo">搜索</button>
+		</div>
+		<div id="qsResults" class="results qs-results"><div class="empty">输入关键词开始搜索。</div></div>
+		<div class="muted" id="qsHint"></div>
+		<script src="markdown.js"></script>
+		<script src="quicksearch.js"></script>
+	</body>
+</html>

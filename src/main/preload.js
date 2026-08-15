@@ -35,10 +35,26 @@ contextBridge.exposeInMainWorld("opencontext", {
 		browse: (payload) => ipcRenderer.invoke("memory:browse", payload),
 		tags: () => ipcRenderer.invoke("memory:tags"),
 		stats: (days) => ipcRenderer.invoke("memory:stats", days),
+		get: (id) => ipcRenderer.invoke("memory:get", id),
+		update: (payload) => ipcRenderer.invoke("memory:update", payload),
+		trash: (limit) => ipcRenderer.invoke("memory:trash", limit),
+		purge: (id) => ipcRenderer.invoke("memory:purge", id),
+		import: () => ipcRenderer.invoke("memory:import"),
+	},
+	access: {
+		tokens: () => ipcRenderer.invoke("access:tokens"),
+		createToken: (name) => ipcRenderer.invoke("access:createToken", name),
+		revokeToken: (id) => ipcRenderer.invoke("access:revokeToken", id),
+		proxyStatus: () => ipcRenderer.invoke("access:proxyStatus"),
+		mcpConfig: () => ipcRenderer.invoke("access:mcpConfig"),
 	},
 	quick: {
 		show: () => ipcRenderer.invoke("quick:show"),
 		hide: () => ipcRenderer.invoke("quick:hide"),
+	},
+	quickSearch: {
+		show: () => ipcRenderer.invoke("quicksearch:show"),
+		hide: () => ipcRenderer.invoke("quicksearch:hide"),
 	},
 	clipboard: {
 		write: (text) => ipcRenderer.invoke("clipboard:write", text),
@@ -65,6 +81,7 @@ contextBridge.exposeInMainWorld("opencontext", {
 		appLog: subscribe("app:log"),
 		updateStatus: subscribe("update:status"),
 		quickFocus: subscribe("quick:focus"),
+		quickSearchFocus: subscribe("quicksearch:focus"),
 		memoryChanged: subscribe("memory:changed"),
 	},
 });

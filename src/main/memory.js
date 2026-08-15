@@ -180,4 +180,97 @@ async function stats(days = 14) {
 	return { total: local.total, first: local.first, days: local.days, byDay: local.byDay, byTag: local.byTag };
 }
 
-module.exports = { save, search, recent, count, remove, restore, all, browse, tags, stats, userId };
+async function get(id) {
+	const local = await runLocal("get", { id: String(id ?? "").trim() });
+	return local.item;
+}
+
+/** Edits a note in place, keeping its original timestamp. */
+async function update({ id, text, tag }) {
+	const messageId = String(id ?? "").trim();
+	const content = String(text ?? "").trim();
+	if (!messageId) throw new Error("缺少要修改的记录编号");
+	if (!content) throw new Error("内容不能为空");
+	const local = await runLocal("update", { id: messageId, content, tag: tag ?? "" });
+	if (!local.updated) throw new Error("没找到这条记录");
+	logger.info("memory", `已修改一条记录（${messageId}）`);
+	return { updated: local.updated };
+}
+
+/** Recycle bin listing (soft-deleted notes). */
+async function trash(limit = 100) {
+	const local = await runLocal("trash", { limit });
+	return local.items;
+}
+
+/** Permanently removes soft-deleted notes; without id empties the bin. */
+async function purge(id) {
+	const local = await runLocal("purge", id ? { id: String(id).trim() } : {});
+	logger.info("memory", `已彻底删除 ${local.purged} 条记录`);
+	return { purged: local.purged };
+}
+
+/**
+ * Restores notes from a JSON backup produced by the export feature.
+ * Existing message ids are skipped, writes go through the daemon.
+ */
+async function importItems(items) {
+	const list = (Array.isArray(items) ? items : [])
+		.map((item) => ({
+			id: String(item.id ?? item.messageId ?? "").trim(),
+			content: String(item.content ?? "").trim(),
+			ts: Number(item.ts ?? item.timestamp ?? Date.now()),
+			tag: String(item.tag ?? item.channel ?? "").trim(),
+		}))
+		.filter((item) => item.id && item.content);
+	if (list.length === 0) throw new Error("备份文件里没有可导入的记录");
+
+	const existing = new Set((await runLocal("existing", { ids: list.map((item) => item.id) })).ids);
+	const fresh = list.filter((item) => !existing.has(item.id));
+	const user = userId();
+	let imported = 0;
+	for (let at = 0; at < fresh.length; at += 50) {
+		const batch = fresh.slice(at, at + 50);
+		const response = await daemon.apiRequest({
+			method: "POST",
+			path: "/v1/raw-messages",
+			body: {
+				userId: user,
+				embedOnInsert: false,
+				messages: batch.map((item) => ({
+					messageId: item.id,
+					userId: user,
+					content: item.content,
+					platform: "desktop",
+					botId: "desktop",
+					channel: item.tag || undefined,
+					timestamp: item.ts,
+					createdAt: item.ts,
+				})),
+			},
+		});
+		if (!response.ok) throw new Error(response.body?.error ?? `导入失败（HTTP ${response.status}）`);
+		imported += batch.length;
+	}
+	logger.info("memory", `已导入 ${imported} 条，跳过重复 ${existing.size} 条`);
+	return { imported, skipped: existing.size, total: list.length };
+}
+
+module.exports = {
+	save,
+	search,
+	recent,
+	count,
+	remove,
+	restore,
+	all,
+	browse,
+	tags,
+	stats,
+	get,
+	update,
+	trash,
+	purge,
+	importItems,
+	userId,
+};

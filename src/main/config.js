@@ -37,6 +37,10 @@ const DEFAULTS = {
 		launchAtLogin: false,
 		/** Global hotkey for the quick capture window; empty disables it. */
 		quickCaptureHotkey: "Control+Alt+O",
+		/** Global hotkey for the quick search window; empty disables it. */
+		quickSearchHotkey: "Control+Alt+P",
+		/** Preferred port for the token-protected HTTP proxy. */
+		tokenProxyPort: 7431,
 		/** Optional external URL to embed instead of the built-in panel. */
 		embeddedUrl: "",
 		npmRegistry: "",

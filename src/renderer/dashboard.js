@@ -157,6 +157,7 @@ function renderResults(target, items, emptyText, query = "") {
 			<span>${escapeHtml(timeAgo(item.ts))}</span>
 			${item.tag ? `<span class="tagpill">${escapeHtml(item.tag)}</span>` : ""}
 			${item.score !== undefined ? `<span>匹配度 ${escapeHtml(item.score)}</span>` : ""}
+			<button class="link" data-open="${escapeHtml(item.id)}">查看</button>
 			<button class="link" data-copy="${escapeHtml(item.id)}">复制</button>
 			<button class="link danger" data-delete="${escapeHtml(item.id)}">删除</button>`;
 		card.appendChild(footer);
@@ -168,6 +169,8 @@ function renderResults(target, items, emptyText, query = "") {
 async function onResultAction(event) {
 	const copyId = event.target.dataset?.copy;
 	const deleteId = event.target.dataset?.delete;
+	const openId = event.target.dataset?.open;
+	if (openId) return openDetail(openId);
 	if (!copyId && !deleteId) return;
 	const card = event.target.closest(".result");
 	const text = card?.dataset.raw ?? card?.textContent ?? "";
@@ -293,6 +296,7 @@ function renderSettings(settings) {
 	$("#cfCloseTray").checked = settings.closeToTray;
 	$("#cfLaunch").checked = settings.launchAtLogin;
 	$("#cfHotkey").value = settings.quickCaptureHotkey ?? "";
+	$("#cfSearchHotkey").value = settings.quickSearchHotkey ?? "";
 	$("#mUser").value = settings.userId;
 }
 
@@ -317,6 +321,7 @@ function collectSettings() {
 		closeToTray: $("#cfCloseTray").checked,
 		launchAtLogin: $("#cfLaunch").checked,
 		quickCaptureHotkey: $("#cfHotkey").value.trim(),
+		quickSearchHotkey: $("#cfSearchHotkey").value.trim(),
 	};
 }
 
@@ -363,6 +368,7 @@ function switchView(name) {
 	if (name === "embed") loadEmbed();
 	if (name === "home") refreshRecent();
 	if (name === "library") refreshLibrary();
+	if (name === "ai") refreshAi();
 }
 
 /* ── 记忆库 ───────────────────────────────────────── */
@@ -453,6 +459,162 @@ function refreshLibrary() {
 	loadStats();
 	loadTags();
 	loadLibrary();
+	loadTrash();
+}
+
+/* ── 回收站 ───────────────────────────────── */
+
+async function loadTrash() {
+	const box = $("#trashList");
+	try {
+		const items = await api.memory.trash(100);
+		if (!items || items.length === 0) {
+			box.innerHTML = '<div class="empty">回收站是空的。</div>';
+			$("#trashEmpty").disabled = true;
+			return;
+		}
+		$("#trashEmpty").disabled = false;
+		box.innerHTML = "";
+		for (const item of items) {
+			const card = document.createElement("article");
+			card.className = "result";
+			card.dataset.raw = item.content ?? "";
+			const body = document.createElement("div");
+			body.className = "md";
+			body.innerHTML = window.renderMarkdown(item.content);
+			card.appendChild(body);
+			const footer = document.createElement("footer");
+			footer.className = "muted";
+			footer.innerHTML = `
+				<span>删除于 ${escapeHtml(timeAgo(item.deletedAt))}</span>
+				${item.tag ? `<span class="tagpill">${escapeHtml(item.tag)}</span>` : ""}
+				<button class="link" data-trash-restore="${escapeHtml(item.id)}">恢复</button>
+				<button class="link danger" data-trash-purge="${escapeHtml(item.id)}">彻底删除</button>`;
+			card.appendChild(footer);
+			box.appendChild(card);
+		}
+	} catch (error) {
+		box.innerHTML = `<div class="empty">读取失败：${escapeHtml(reason(error))}</div>`;
+	}
+}
+
+async function onTrashAction(event) {
+	const restoreId = event.target.dataset?.trashRestore;
+	const purgeId = event.target.dataset?.trashPurge;
+	if (!restoreId && !purgeId) return;
+	event.target.disabled = true;
+	try {
+		if (restoreId) {
+			await api.memory.restore(restoreId);
+			$("#trashHint").textContent = "已恢复这条记录。";
+		} else {
+			if (event.target.dataset.confirmed !== "1") {
+				event.target.dataset.confirmed = "1";
+				event.target.textContent = "再点一次确认";
+				event.target.disabled = false;
+				return;
+			}
+			await api.memory.purge(purgeId);
+			$("#trashHint").textContent = "已彻底删除。";
+		}
+		await loadTrash();
+		await loadLibrary();
+	} catch (error) {
+		$("#trashHint").textContent = `操作失败：${reason(error)}`;
+		event.target.disabled = false;
+	}
+}
+
+/* ── 记录详情 / 编辑 ───────────────────────── */
+
+const detail = { id: null, item: null };
+
+function setDetailEditing(editing) {
+	$("#detailBody").hidden = editing;
+	$("#detailText").hidden = !editing;
+	$("#detailTagWrap").hidden = !editing;
+	$("#detailEdit").hidden = editing;
+	$("#detailSave").hidden = !editing;
+	$("#detailCancel").hidden = !editing;
+}
+
+async function openDetail(id) {
+	try {
+		const item = await api.memory.get(id);
+		if (!item) throw new Error("记录不存在");
+		detail.id = id;
+		detail.item = item;
+		$("#detailBody").innerHTML = window.renderMarkdown(item.content);
+		$("#detailText").value = item.content ?? "";
+		$("#detailTag").value = item.tag ?? "";
+		$("#detailMeta").textContent = `${item.ts ? new Date(Number(item.ts)).toLocaleString() : ""}${item.tag ? ` · ${item.tag}` : ""}`;
+		$("#detailHint").textContent = "";
+		setDetailEditing(false);
+		$("#detailMask").hidden = false;
+	} catch (error) {
+		$("#listHint").textContent = `打开失败：${reason(error)}`;
+	}
+}
+
+function closeDetail() {
+	$("#detailMask").hidden = true;
+	detail.id = null;
+	detail.item = null;
+}
+
+/* ── AI 连接（MCP + 令牌） ───────────────────── */
+
+async function loadMcp() {
+	try {
+		const mcp = await api.access.mcpConfig();
+		$("#mcpJson").textContent = mcp.json;
+		$("#mcpHint").textContent = mcp.available ? "" : "运行环境还没安装好，配置可能不完整。";
+	} catch (error) {
+		$("#mcpJson").textContent = `生成失败：${reason(error)}`;
+	}
+}
+
+async function loadTokens(newToken = null) {
+	const box = $("#tokenList");
+	try {
+		const [tokens, proxy] = await Promise.all([api.access.tokens(), api.access.proxyStatus()]);
+		$("#tokenProxyStatus").textContent = proxy.running
+			? `令牌接口运行中：${proxy.url}`
+			: tokens.length > 0
+				? "令牌接口未运行（需要本地服务处于运行中）"
+				: "";
+		if (tokens.length === 0) {
+			box.innerHTML = '<div class="empty">还没有令牌。创建一个后，会开启带鉴权的本地接口。</div>';
+			return;
+		}
+		box.innerHTML = "";
+		for (const token of tokens) {
+			const isNew = newToken && token.id === newToken.id;
+			const card = document.createElement("article");
+			card.className = "result";
+			const masked = `${token.value.slice(0, 6)}…${token.value.slice(-4)}`;
+			card.innerHTML = `
+				<div class="row between">
+					<strong>${escapeHtml(token.name)}</strong>
+					<span class="mono muted">${escapeHtml(isNew ? token.value : masked)}</span>
+				</div>
+				<footer class="muted">
+					<span>创建于 ${escapeHtml(timeAgo(token.createdAt))}</span>
+					<span>${token.lastUsedAt ? `最近使用 ${escapeHtml(timeAgo(token.lastUsedAt))}` : "从未使用"}</span>
+					<button class="link" data-token-copy="${escapeHtml(token.id)}">复制令牌</button>
+					<button class="link danger" data-token-revoke="${escapeHtml(token.id)}">吊销</button>
+				</footer>`;
+			box.appendChild(card);
+		}
+		if (newToken) $("#tokenHint").textContent = "已创建，令牌完整显示一次，请及时复制保存。";
+	} catch (error) {
+		box.innerHTML = `<div class="empty">读取失败：${escapeHtml(reason(error))}</div>`;
+	}
+}
+
+function refreshAi() {
+	loadMcp();
+	loadTokens();
 }
 
 function embedTarget() {
@@ -568,12 +730,135 @@ $("#btnSearch").addEventListener("click", doSearch);
 $("#searchText").addEventListener("keydown", (event) => {
 	if (event.key === "Enter") doSearch();
 });
+/** 与快速小窗一致：Ctrl+Enter / Cmd+Enter 保存 */
+$("#noteText").addEventListener("keydown", (event) => {
+	if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) $("#btnSave").click();
+});
+document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && !$("#detailMask").hidden) closeDetail();
+});
 $("#btnRefreshRecent").addEventListener("click", refreshRecent);
 $("#btnQuick").addEventListener("click", () => api.quick.show());
 $("#recentList").addEventListener("click", onResultAction);
 $("#searchResults").addEventListener("click", onResultAction);
 $("#btnExportMd").addEventListener("click", () => exportNotes("md", "#listHint"));
 $("#btnExportJson").addEventListener("click", () => exportNotes("json", "#settingsHint"));
+$("#btnImportJson").addEventListener("click", async () => {
+	$("#settingsHint").textContent = "选择备份文件…";
+	try {
+		const result = await api.memory.import();
+		$("#settingsHint").textContent = result.canceled
+			? "已取消导入。"
+			: `导入完成：新增 ${result.imported} 条，跳过重复 ${result.skipped} 条。`;
+	} catch (error) {
+		$("#settingsHint").textContent = `导入失败：${reason(error)}`;
+	}
+});
+
+$("#btnGoAi").addEventListener("click", () => switchView("ai"));
+
+$("#trashList").addEventListener("click", onTrashAction);
+$("#trashRefresh").addEventListener("click", loadTrash);
+$("#trashEmpty").addEventListener("click", async (event) => {
+	if (event.target.dataset.confirmed !== "1") {
+		event.target.dataset.confirmed = "1";
+		event.target.textContent = "再点一次确认清空";
+		setTimeout(() => {
+			event.target.dataset.confirmed = "";
+			event.target.textContent = "清空回收站";
+		}, 4000);
+		return;
+	}
+	event.target.dataset.confirmed = "";
+	event.target.textContent = "清空回收站";
+	try {
+		const result = await api.memory.purge();
+		$("#trashHint").textContent = `已清空，彻底删除 ${result.purged} 条。`;
+		await loadTrash();
+	} catch (error) {
+		$("#trashHint").textContent = `清空失败：${reason(error)}`;
+	}
+});
+
+$("#detailClose").addEventListener("click", closeDetail);
+$("#detailMask").addEventListener("click", (event) => {
+	if (event.target.id === "detailMask") closeDetail();
+});
+$("#detailEdit").addEventListener("click", () => setDetailEditing(true));
+$("#detailCancel").addEventListener("click", () => {
+	$("#detailText").value = detail.item?.content ?? "";
+	$("#detailTag").value = detail.item?.tag ?? "";
+	setDetailEditing(false);
+});
+$("#detailCopy").addEventListener("click", async (event) => {
+	await api.clipboard.write(detail.item?.content ?? "");
+	event.target.textContent = "已复制";
+	setTimeout(() => {
+		event.target.textContent = "复制";
+	}, 1200);
+});
+$("#detailSave").addEventListener("click", async () => {
+	$("#detailSave").disabled = true;
+	$("#detailHint").textContent = "正在保存…";
+	try {
+		await api.memory.update({ id: detail.id, text: $("#detailText").value, tag: $("#detailTag").value });
+		detail.item = { ...detail.item, content: $("#detailText").value.trim(), tag: $("#detailTag").value.trim() };
+		$("#detailBody").innerHTML = window.renderMarkdown(detail.item.content);
+		$("#detailHint").textContent = "已保存 ✓（保留原记录时间）";
+		setDetailEditing(false);
+		await refreshRecent();
+		if ($("#view-library").classList.contains("active")) await loadLibrary();
+	} catch (error) {
+		$("#detailHint").textContent = `保存失败：${reason(error)}`;
+	} finally {
+		$("#detailSave").disabled = false;
+	}
+});
+
+$("#btnCopyMcp").addEventListener("click", async (event) => {
+	await api.clipboard.write($("#mcpJson").textContent);
+	event.target.textContent = "已复制 ✓";
+	setTimeout(() => {
+		event.target.textContent = "复制 MCP 配置";
+	}, 1400);
+});
+$("#btnRefreshMcp").addEventListener("click", loadMcp);
+$("#btnCreateToken").addEventListener("click", async () => {
+	$("#btnCreateToken").disabled = true;
+	try {
+		const token = await api.access.createToken($("#tokenName").value);
+		$("#tokenName").value = "";
+		await loadTokens(token);
+	} catch (error) {
+		$("#tokenHint").textContent = `创建失败：${reason(error)}`;
+	} finally {
+		$("#btnCreateToken").disabled = false;
+	}
+});
+$("#tokenList").addEventListener("click", async (event) => {
+	const copyId = event.target.dataset?.tokenCopy;
+	const revokeId = event.target.dataset?.tokenRevoke;
+	if (copyId) {
+		const tokens = await api.access.tokens();
+		const token = tokens.find((entry) => entry.id === copyId);
+		if (token) await api.clipboard.write(token.value);
+		event.target.textContent = "已复制";
+		setTimeout(() => {
+			event.target.textContent = "复制令牌";
+		}, 1200);
+		return;
+	}
+	if (revokeId) {
+		if (event.target.dataset.confirmed !== "1") {
+			event.target.dataset.confirmed = "1";
+			event.target.textContent = "再点一次确认";
+			return;
+		}
+		await api.access.revokeToken(revokeId);
+		$("#tokenHint").textContent = "已吊销。";
+		await loadTokens();
+	}
+});
 
 $("#btnCopyUrl").addEventListener("click", (event) => copyAi("url", event.target));
 $("#btnCopySearch").addEventListener("click", (event) => copyAi("search", event.target));

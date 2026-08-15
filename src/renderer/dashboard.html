@@ -18,6 +18,7 @@
 				</div>
 				<button class="nav active" data-view="home">首页</button>
 				<button class="nav" data-view="library">记忆库</button>
+				<button class="nav" data-view="ai">AI 连接</button>
 				<button class="nav" data-view="help">使用帮助</button>
 				<button class="nav" data-view="settings">设置</button>
 				<button class="nav" data-view="about">关于与更新</button>
@@ -120,6 +121,7 @@
 							<button id="btnCopySearch">复制检索示例</button>
 							<button id="btnCopyWrite">复制写入示例</button>
 							<button id="btnOpenService">用浏览器打开</button>
+							<button id="btnGoAi">MCP 与令牌管理 →</button>
 						</div>
 					</div>
 				</section>
@@ -167,6 +169,56 @@
 							</div>
 						</div>
 					</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">回收站</strong>
+							<div class="row">
+								<button id="trashRefresh">刷新</button>
+								<button class="danger" id="trashEmpty">清空回收站</button>
+							</div>
+						</div>
+						<div class="muted">删除的记录会先放在这里，可以随时恢复；彻底删除后无法找回。</div>
+						<div id="trashList" class="results"><div class="empty">回收站是空的。</div></div>
+						<span class="muted" id="trashHint"></span>
+					</div>
+				</section>
+
+				<!-- AI 连接（MCP + 令牌） -->
+				<section class="view" id="view-ai">
+					<h2>AI 连接</h2>
+					<div class="sub">把这台电脑上的记忆接给 AI 工具：推荐用 MCP，也可以用带令牌的 HTTP 接口。</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">MCP 接入（推荐）</strong>
+							<span class="muted" id="mcpHint"></span>
+						</div>
+						<div class="muted">
+							把下面的配置粘到支持 MCP 的 AI 工具里（如 Claude Desktop 的 claude_desktop_config.json、Cursor 的 mcp.json），AI 就能直接读写你的记忆。配置只在本机运行，不需要联网。
+						</div>
+						<pre class="log md mono" id="mcpJson">正在生成配置…</pre>
+						<div class="row">
+							<button class="primary" id="btnCopyMcp">复制 MCP 配置</button>
+							<button id="btnRefreshMcp">重新生成</button>
+						</div>
+					</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">访问令牌（HTTP 接口用）</strong>
+							<span class="muted" id="tokenProxyStatus"></span>
+						</div>
+						<div class="muted">
+							创建令牌后，会额外开一个需要“Authorization: Bearer 令牌”的本地接口，适合给脚本或第三方工具用；原来不带令牌的接口不受影响。令牌只保存在本机。
+						</div>
+						<div class="row">
+							<span class="field grow"><input id="tokenName" placeholder="令牌备注，如：我的脚本" /></span>
+							<button class="primary" id="btnCreateToken">创建令牌</button>
+						</div>
+						<div id="tokenList" class="results"><div class="empty">还没有令牌。</div></div>
+						<span class="muted" id="tokenHint"></span>
+					</div>
 				</section>
 
 				<!-- 使用帮助 -->
@@ -202,7 +254,7 @@
 						<details>
 							<summary>怎么随时快速记一条？</summary>
 							<div class="muted">
-								桌面端在系统托盘常驻：点托盘图标菜单里的“快速记一条…”，或按快捷键 Control+Alt+O，会弹出一个小窗，写完按 Ctrl+Enter 保存。关闭主窗口不会停掉服务。
+								桌面端在系统托盘常驻：按 Control+Alt+O 快速记一条，按 Control+Alt+P 随时查询记忆（托盘菜单里也有入口，快捷键可在设置里修改）。小窗里写完按 Ctrl+Enter 保存，按 Esc 关闭。关闭主窗口不会停掉服务。
 							</div>
 						</details>
 						<details>
@@ -246,15 +298,22 @@
 						<label class="check"><input type="checkbox" id="cfTray" /> 在系统托盘常驻（推荐，随时快速记一条）</label>
 						<label class="check"><input type="checkbox" id="cfCloseTray" /> 关闭窗口时只收进托盘，服务继续运行</label>
 						<label class="check"><input type="checkbox" id="cfLaunch" /> 开机自动启动（安装版生效）</label>
-						<div class="field mid">
-							<label>“快速记一条”快捷键（留空表示不用快捷键）</label>
-							<input id="cfHotkey" placeholder="Control+Alt+O" />
+						<div class="grid-2">
+							<div class="field">
+								<label>“快速记一条”快捷键（留空表示不用）</label>
+								<input id="cfHotkey" placeholder="Control+Alt+O" />
+							</div>
+							<div class="field">
+								<label>“查询记忆”快捷键（留空表示不用）</label>
+								<input id="cfSearchHotkey" placeholder="Control+Alt+P" />
+							</div>
 						</div>
 						<div class="row">
 							<button class="primary" id="btnSaveSettings">保存</button>
 							<button id="btnSaveRestart">保存并重启服务</button>
 							<button id="btnOpenData">打开数据目录</button>
 							<button id="btnExportJson">导出 JSON 备份</button>
+							<button id="btnImportJson">导入 JSON 备份</button>
 							<span class="muted" id="settingsHint"></span>
 						</div>
 
@@ -403,6 +462,30 @@
 					</div>
 				</section>
 			</main>
+		</div>
+		<!-- 记录详情 / 编辑 -->
+		<div class="modal-mask" id="detailMask" hidden>
+			<div class="modal card stack">
+				<div class="row between">
+					<strong class="sec" id="detailTitle">记录详情</strong>
+					<div class="row">
+						<span class="muted" id="detailMeta"></span>
+						<button id="detailClose">关闭</button>
+					</div>
+				</div>
+				<div class="md detail-body" id="detailBody"></div>
+				<textarea id="detailText" class="plain" hidden></textarea>
+				<div class="row">
+					<span class="field grow cap" id="detailTagWrap" hidden>
+						<input id="detailTag" placeholder="分类标签（可留空）" />
+					</span>
+					<button id="detailEdit">编辑</button>
+					<button class="primary" id="detailSave" hidden>保存修改</button>
+					<button id="detailCancel" hidden>取消</button>
+					<button id="detailCopy">复制</button>
+					<span class="muted" id="detailHint"></span>
+				</div>
+			</div>
 		</div>
 		<script src="markdown.js"></script>
 		<script src="dashboard.js"></script>

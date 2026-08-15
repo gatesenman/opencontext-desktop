@@ -13,6 +13,8 @@ const memory = require("./memory");
 const updater = require("./updater");
 const tray = require("./tray");
 const quick = require("./quick-capture");
+const quickSearch = require("./quick-search");
+const access = require("./access");
 
 const RENDERER = path.join(__dirname, "..", "renderer");
 
@@ -85,18 +87,23 @@ function applyLaunchAtLogin() {
 	app.setLoginItemSettings({ openAtLogin: Boolean(config.settings.launchAtLogin), args: ["--hidden"] });
 }
 
-function applyHotkey() {
-	globalShortcut.unregisterAll();
-	const accelerator = config.settings.quickCaptureHotkey?.trim();
-	if (!accelerator) return { ok: true, registered: false };
+function registerHotkey(accelerator, handler) {
+	if (!accelerator) return true;
 	try {
-		const ok = globalShortcut.register(accelerator, () => quick.toggle());
+		const ok = globalShortcut.register(accelerator, handler);
 		if (!ok) logger.warn("hotkey", `快捷键被其他软件占用：${accelerator}`);
-		return { ok, registered: ok };
+		return ok;
 	} catch (error) {
 		logger.warn("hotkey", `快捷键无效：${accelerator}（${error.message}）`);
-		return { ok: false, registered: false };
+		return false;
 	}
+}
+
+function applyHotkey() {
+	globalShortcut.unregisterAll();
+	const capture = registerHotkey(config.settings.quickCaptureHotkey?.trim(), () => quick.toggle());
+	const search = registerHotkey(config.settings.quickSearchHotkey?.trim(), () => quickSearch.toggle());
+	return { ok: capture && search };
 }
 
 function applyTray() {
@@ -112,6 +119,10 @@ function buildMenu() {
 				{
 					label: "快速记一条",
 					click: () => quick.show(),
+				},
+				{
+					label: "查询记忆",
+					click: () => quickSearch.show(),
 				},
 				{
 					label: "检查更新",
@@ -205,6 +216,25 @@ function registerIpc() {
 		return result;
 	});
 	ipcMain.handle("memory:export", (_event, format) => exportNotes(format));
+	ipcMain.handle("memory:get", (_event, id) => memory.get(id));
+	ipcMain.handle("memory:update", async (_event, payload) => {
+		const result = await memory.update(payload ?? {});
+		send("memory:changed", { reason: "update", id: payload?.id });
+		return result;
+	});
+	ipcMain.handle("memory:trash", (_event, limit) => memory.trash(limit));
+	ipcMain.handle("memory:purge", async (_event, id) => {
+		const result = await memory.purge(id);
+		send("memory:changed", { reason: "purge", id });
+		return result;
+	});
+	ipcMain.handle("memory:import", () => importNotes());
+
+	ipcMain.handle("access:tokens", () => access.listTokens());
+	ipcMain.handle("access:createToken", (_event, name) => access.createToken(name));
+	ipcMain.handle("access:revokeToken", (_event, id) => access.revokeToken(id));
+	ipcMain.handle("access:proxyStatus", () => access.syncProxy());
+	ipcMain.handle("access:mcpConfig", () => access.mcpConfig());
 	ipcMain.handle("memory:browse", (_event, payload) => memory.browse(payload ?? {}));
 	ipcMain.handle("memory:tags", () => memory.tags());
 	ipcMain.handle("memory:stats", (_event, days) => memory.stats(days));
@@ -235,6 +265,8 @@ function registerIpc() {
 		quick.hide();
 		send("memory:changed", { reason: "quick" });
 	});
+	ipcMain.handle("quicksearch:show", () => quickSearch.show());
+	ipcMain.handle("quicksearch:hide", () => quickSearch.hide());
 	ipcMain.handle("clipboard:write", (_event, text) => clipboard.writeText(String(text ?? "")));
 
 	ipcMain.handle("shell:openPath", (_event, target) => shell.openPath(target));
@@ -271,6 +303,26 @@ async function exportNotes(format = "md") {
 	return { ok: true, filePath, total: items.length };
 }
 
+/** Restores a JSON backup created by the export feature. */
+async function importNotes() {
+	const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow ?? undefined, {
+		title: "导入备份",
+		filters: [{ name: "JSON 备份", extensions: ["json"] }],
+		properties: ["openFile"],
+	});
+	if (canceled || !filePaths?.[0]) return { ok: false, canceled: true };
+	let parsed;
+	try {
+		parsed = JSON.parse(fs.readFileSync(filePaths[0], "utf8"));
+	} catch {
+		throw new Error("这个文件不是有效的 JSON 备份");
+	}
+	const items = Array.isArray(parsed) ? parsed : parsed.items;
+	const result = await memory.importItems(items);
+	send("memory:changed", { reason: "import" });
+	return { ok: true, ...result };
+}
+
 function singleInstance() {
 	if (!app.requestSingleInstanceLock()) {
 		app.quit();
@@ -293,6 +345,8 @@ if (singleInstance()) {
 		updater.init((status) => send("update:status", status));
 
 		quick.setFallback(() => showMain());
+		quickSearch.setFallback(() => showMain());
+		daemon.emitter.on("status", () => access.syncProxy().catch(() => {}));
 
 		applyTray();
 		/** Starting hidden only makes sense when the tray icon really exists. */
@@ -322,6 +376,8 @@ if (singleInstance()) {
 		event.preventDefault();
 		globalShortcut.unregisterAll();
 		quick.destroy();
+		quickSearch.destroy();
+		access.stopProxy();
 		await daemon.stop().catch(() => {});
 		app.exit(0);
 	});

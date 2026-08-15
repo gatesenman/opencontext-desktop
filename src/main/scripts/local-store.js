@@ -6,7 +6,8 @@
  * with the OpenContext runtime).
  *
  * Usage: node local-store.js <action> <json-payload>
- * Actions: recent | search | count | all | delete | restore | browse | tags | stats
+ * Actions: recent | search | count | all | delete | restore | browse | tags |
+ *          stats | get | update | trash | purge | existing
  */
 
 const fs = require("node:fs");
@@ -76,7 +77,7 @@ function run() {
 	if (!fs.existsSync(payload.dbFile)) {
 		return { ok: true, items: [], total: 0, empty: true };
 	}
-	const db = openDatabase(action === "delete" || action === "restore");
+	const db = openDatabase(["delete", "restore", "update", "purge"].includes(action));
 	try {
 		const table = db
 			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'raw_messages'")
@@ -171,6 +172,71 @@ function run() {
 				)
 				.all(payload.userId);
 			return { ok: true, items: rows.map(rowToItem) };
+		}
+
+		if (action === "get") {
+			const row = db
+				.prepare(
+					`SELECT message_id, content, timestamp, created_at, platform, channel, embedding
+					 FROM raw_messages WHERE user_id = ? AND message_id = ?`,
+				)
+				.get(payload.userId, String(payload.id ?? ""));
+			return row ? { ok: true, item: rowToItem(row) } : { ok: false, error: "记录不存在" };
+		}
+
+		/** In-place edit: keeps the original timestamp, drops the stale embedding. */
+		if (action === "update") {
+			const result = db
+				.prepare(
+					`UPDATE raw_messages
+					 SET content = ?, channel = ?, embedding = NULL, embedding_model = NULL,
+					     embedding_content_hash = NULL, embedding_updated_at = NULL
+					 WHERE user_id = ? AND message_id = ?`,
+				)
+				.run(
+					String(payload.content ?? ""),
+					String(payload.tag ?? "").trim() || null,
+					payload.userId,
+					String(payload.id ?? ""),
+				);
+			return { ok: true, updated: result.changes };
+		}
+
+		/** Recycle bin: everything soft-deleted, newest deletion first. */
+		if (action === "trash") {
+			const rows = db
+				.prepare(
+					`SELECT message_id, content, timestamp, created_at, platform, channel, embedding, deprecated_at
+					 FROM raw_messages
+					 WHERE user_id = ? AND deprecated_at IS NOT NULL
+					 ORDER BY deprecated_at DESC
+					 LIMIT ?`,
+				)
+				.all(payload.userId, Math.min(Number(payload.limit) || 100, 500));
+			return { ok: true, items: rows.map((row) => ({ ...rowToItem(row), deletedAt: row.deprecated_at })) };
+		}
+
+		/** Hard delete a soft-deleted row (or empty the whole recycle bin). */
+		if (action === "purge") {
+			const result = payload.id
+				? db
+						.prepare(
+							"DELETE FROM raw_messages WHERE user_id = ? AND message_id = ? AND deprecated_at IS NOT NULL",
+						)
+						.run(payload.userId, String(payload.id))
+				: db
+						.prepare("DELETE FROM raw_messages WHERE user_id = ? AND deprecated_at IS NOT NULL")
+						.run(payload.userId);
+			return { ok: true, purged: result.changes };
+		}
+
+		/** Which of the candidate ids already exist (import dedupe). */
+		if (action === "existing") {
+			const ids = Array.isArray(payload.ids) ? payload.ids.map(String).slice(0, 20_000) : [];
+			const found = new Set();
+			const probe = db.prepare("SELECT 1 FROM raw_messages WHERE message_id = ?");
+			for (const id of ids) if (probe.get(id)) found.add(id);
+			return { ok: true, ids: [...found] };
 		}
 
 		/** Soft delete: the runtime already treats deprecated rows as gone. */

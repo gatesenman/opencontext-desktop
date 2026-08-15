@@ -9,6 +9,7 @@ const path = require("node:path");
 const { Tray, Menu, nativeImage, app } = require("electron");
 const daemon = require("./daemon");
 const quick = require("./quick-capture");
+const quickSearch = require("./quick-search");
 const logger = require("./logger");
 
 /** Lives under src/ so electron-builder ships it inside the app bundle. */
@@ -37,6 +38,7 @@ function refresh() {
 	tray.setContextMenu(
 		Menu.buildFromTemplate([
 			{ label: "快速记一条…", click: () => quick.show() },
+			{ label: "查询记忆…", click: () => quickSearch.show() },
 			{ label: "打开主界面", click: () => handlers.showMain() },
 			{ type: "separator" },
 			{ label: label, enabled: false },
