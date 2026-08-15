@@ -1,7 +1,7 @@
 {
   "name": "opencontext-desktop",
   "productName": "OpenContext Desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Desktop shell for the OpenContext agentic context runtime: first-run environment detection, automatic runtime install, embedded control panel and in-app updates.",
   "main": "src/main/index.js",
   "author": {

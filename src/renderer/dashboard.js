@@ -175,7 +175,7 @@ function renderUpdate(status) {
 		ready: ["ok", `已下载 ${status.version ?? ""}，可安装`],
 		"not-available": ["ok", "已是最新版本"],
 		error: ["fail", "检查更新失败"],
-		unsupported: ["", "开发模式不检查更新"],
+		unsupported: ["warn", "无法自动更新"],
 	};
 	const [dot, text] = map[status.status] ?? ["", status.status];
 	$("#upDot").className = `dot ${dot}`;

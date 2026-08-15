@@ -60,7 +60,15 @@ async function check() {
 		return { ...state };
 	}
 	try {
-		await autoUpdater.checkForUpdates();
+		// Returns null when the current install layout cannot self-update
+		// (e.g. an extracted AppImage, or a Linux build without an updater).
+		const result = await autoUpdater.checkForUpdates();
+		if (!result) {
+			update({
+				status: "unsupported",
+				error: "当前安装方式不支持自动更新，请到项目主页下载新版本",
+			});
+		}
 	} catch (error) {
 		update({ status: "error", error: error?.message ?? String(error) });
 	}
