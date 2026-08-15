@@ -29,6 +29,16 @@ contextBridge.exposeInMainWorld("opencontext", {
 		search: (payload) => ipcRenderer.invoke("memory:search", payload),
 		recent: (limit) => ipcRenderer.invoke("memory:recent", limit),
 		count: () => ipcRenderer.invoke("memory:count"),
+		remove: (id) => ipcRenderer.invoke("memory:delete", id),
+		restore: (id) => ipcRenderer.invoke("memory:restore", id),
+		export: (format) => ipcRenderer.invoke("memory:export", format),
+	},
+	quick: {
+		show: () => ipcRenderer.invoke("quick:show"),
+		hide: () => ipcRenderer.invoke("quick:hide"),
+	},
+	clipboard: {
+		write: (text) => ipcRenderer.invoke("clipboard:write", text),
 	},
 	settings: {
 		get: () => ipcRenderer.invoke("settings:get"),
@@ -51,5 +61,7 @@ contextBridge.exposeInMainWorld("opencontext", {
 		daemonLog: subscribe("daemon:log"),
 		appLog: subscribe("app:log"),
 		updateStatus: subscribe("update:status"),
+		quickFocus: subscribe("quick:focus"),
+		memoryChanged: subscribe("memory:changed"),
 	},
 });

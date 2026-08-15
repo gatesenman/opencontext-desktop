@@ -139,4 +139,29 @@ async function count() {
 	return local.total;
 }
 
-module.exports = { save, search, recent, count, userId };
+/** Hides one note from every view (soft delete, same semantics as the runtime). */
+async function remove(id) {
+	const messageId = String(id ?? "").trim();
+	if (!messageId) throw new Error("缺少要删除的记录编号");
+	const local = await runLocal("delete", { id: messageId });
+	if (!local.removed) throw new Error("没找到这条记录，可能已经删除了");
+	logger.info("memory", `已删除一条记录（${messageId}）`);
+	return { removed: local.removed };
+}
+
+/** Undo for a delete the user did not mean. */
+async function restore(id) {
+	const messageId = String(id ?? "").trim();
+	if (!messageId) throw new Error("缺少要恢复的记录编号");
+	const local = await runLocal("restore", { id: messageId });
+	if (!local.restored) throw new Error("没找到这条记录");
+	logger.info("memory", `已恢复一条记录（${messageId}）`);
+	return { restored: local.restored };
+}
+
+async function all() {
+	const local = await runLocal("all");
+	return local.items;
+}
+
+module.exports = { save, search, recent, count, remove, restore, all, userId };

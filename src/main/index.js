@@ -1,7 +1,8 @@
 "use strict";
 
 const path = require("node:path");
-const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require("electron");
+const fs = require("node:fs");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard, globalShortcut } = require("electron");
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
@@ -10,6 +11,8 @@ const { install } = require("./installer");
 const daemon = require("./daemon");
 const memory = require("./memory");
 const updater = require("./updater");
+const tray = require("./tray");
+const quick = require("./quick-capture");
 
 const RENDERER = path.join(__dirname, "..", "renderer");
 
@@ -29,7 +32,7 @@ function createWindow() {
 		minWidth: 900,
 		minHeight: 640,
 		show: false,
-		backgroundColor: "#0e1116",
+		backgroundColor: "#f8f9fb",
 		title: "OpenContext Desktop",
 		icon: path.join(__dirname, "..", "..", "build", "icon.png"),
 		webPreferences: {
@@ -42,6 +45,14 @@ function createWindow() {
 	});
 
 	mainWindow.once("ready-to-show", () => mainWindow.show());
+	/** Closing the window keeps the local service alive behind the tray icon. */
+	mainWindow.on("close", (event) => {
+		const settings = config.settings;
+		/** Without a live tray icon hiding would leave no way back in. */
+		if (quitting || !settings.closeToTray || !tray.isActive()) return;
+		event.preventDefault();
+		mainWindow.hide();
+	});
 	mainWindow.on("closed", () => {
 		mainWindow = null;
 	});
@@ -59,11 +70,49 @@ function loadInitialView() {
 	mainWindow.loadFile(path.join(RENDERER, view));
 }
 
+function showMain() {
+	if (!mainWindow || mainWindow.isDestroyed()) {
+		createWindow();
+		return;
+	}
+	if (mainWindow.isMinimized()) mainWindow.restore();
+	mainWindow.show();
+	mainWindow.focus();
+}
+
+function applyLaunchAtLogin() {
+	if (!app.isPackaged) return;
+	app.setLoginItemSettings({ openAtLogin: Boolean(config.settings.launchAtLogin), args: ["--hidden"] });
+}
+
+function applyHotkey() {
+	globalShortcut.unregisterAll();
+	const accelerator = config.settings.quickCaptureHotkey?.trim();
+	if (!accelerator) return { ok: true, registered: false };
+	try {
+		const ok = globalShortcut.register(accelerator, () => quick.toggle());
+		if (!ok) logger.warn("hotkey", `快捷键被其他软件占用：${accelerator}`);
+		return { ok, registered: ok };
+	} catch (error) {
+		logger.warn("hotkey", `快捷键无效：${accelerator}（${error.message}）`);
+		return { ok: false, registered: false };
+	}
+}
+
+function applyTray() {
+	if (config.settings.trayEnabled) tray.init({ showMain, checkUpdate: () => updater.check(), quit: () => app.quit() });
+	else tray.destroy();
+}
+
 function buildMenu() {
 	const template = [
 		{
 			label: "OpenContext",
 			submenu: [
+				{
+					label: "快速记一条",
+					click: () => quick.show(),
+				},
 				{
 					label: "检查更新",
 					click: () => updater.check(),
@@ -145,11 +194,25 @@ function registerIpc() {
 	ipcMain.handle("memory:search", (_event, payload) => memory.search(payload ?? {}));
 	ipcMain.handle("memory:recent", (_event, limit) => memory.recent(limit));
 	ipcMain.handle("memory:count", () => memory.count());
+	ipcMain.handle("memory:delete", async (_event, id) => {
+		const result = await memory.remove(id);
+		send("memory:changed", { reason: "delete", id });
+		return result;
+	});
+	ipcMain.handle("memory:restore", async (_event, id) => {
+		const result = await memory.restore(id);
+		send("memory:changed", { reason: "restore", id });
+		return result;
+	});
+	ipcMain.handle("memory:export", (_event, format) => exportNotes(format));
 
 	ipcMain.handle("settings:get", () => config.settings);
 	ipcMain.handle("settings:save", async (_event, patch) => {
 		const next = config.patchSettings(patch);
 		logger.info("settings", `已更新：${Object.keys(patch ?? {}).join(", ")}`);
+		applyTray();
+		applyHotkey();
+		applyLaunchAtLogin();
 		return next;
 	});
 
@@ -164,9 +227,45 @@ function registerIpc() {
 	ipcMain.handle("update:download", () => updater.download());
 	ipcMain.handle("update:install", () => updater.install());
 
+	ipcMain.handle("quick:show", () => quick.show());
+	ipcMain.handle("quick:hide", () => {
+		quick.hide();
+		send("memory:changed", { reason: "quick" });
+	});
+	ipcMain.handle("clipboard:write", (_event, text) => clipboard.writeText(String(text ?? "")));
+
 	ipcMain.handle("shell:openPath", (_event, target) => shell.openPath(target));
 	ipcMain.handle("shell:openExternal", (_event, url) => shell.openExternal(url));
 	ipcMain.handle("app:logs", () => logger.history());
+}
+
+/** One-click backup: everything the user wrote, as Markdown or JSON. */
+async function exportNotes(format = "md") {
+	const items = await memory.all();
+	const stamp = new Date().toISOString().slice(0, 10);
+	const { canceled, filePath } = await dialog.showSaveDialog(mainWindow ?? undefined, {
+		title: "导出备份",
+		defaultPath: path.join(app.getPath("documents"), `opencontext-${stamp}.${format === "json" ? "json" : "md"}`),
+		filters:
+			format === "json"
+				? [{ name: "JSON", extensions: ["json"] }]
+				: [{ name: "Markdown", extensions: ["md", "txt"] }],
+	});
+	if (canceled || !filePath) return { ok: false, canceled: true, total: items.length };
+
+	const body =
+		format === "json"
+			? `${JSON.stringify({ exportedAt: Date.now(), userId: memory.userId(), items }, null, 2)}\n`
+			: [
+					`# OpenContext 备份（${stamp}）`,
+					"",
+					...items.map(
+						(item) => `## ${new Date(Number(item.ts)).toLocaleString()}\n\n${item.content}\n`,
+					),
+			  ].join("\n");
+	fs.writeFileSync(filePath, body, "utf8");
+	logger.info("export", `已导出 ${items.length} 条到 ${filePath}`);
+	return { ok: true, filePath, total: items.length };
 }
 
 function singleInstance() {
@@ -174,12 +273,7 @@ function singleInstance() {
 		app.quit();
 		return false;
 	}
-	app.on("second-instance", () => {
-		if (mainWindow) {
-			if (mainWindow.isMinimized()) mainWindow.restore();
-			mainWindow.focus();
-		}
-	});
+	app.on("second-instance", () => showMain());
 	return true;
 }
 
@@ -195,7 +289,14 @@ if (singleInstance()) {
 		logger.onEntry((entry) => send("app:log", entry));
 		updater.init((status) => send("update:status", status));
 
-		createWindow();
+		quick.setFallback(() => showMain());
+
+		applyTray();
+		/** Starting hidden only makes sense when the tray icon really exists. */
+		const hidden = process.argv.includes("--hidden") && tray.isActive();
+		if (!hidden) createWindow();
+		applyHotkey();
+		applyLaunchAtLogin();
 
 		const state = config.get();
 		if (state.installed && config.settings.autoStartDaemon) {
@@ -208,13 +309,16 @@ if (singleInstance()) {
 	});
 
 	app.on("window-all-closed", () => {
-		if (process.platform !== "darwin") app.quit();
+		/** With a tray icon the app is expected to keep serving in the background. */
+		if (process.platform !== "darwin" && !tray.isActive()) app.quit();
 	});
 
 	app.on("before-quit", async (event) => {
 		if (quitting) return;
 		quitting = true;
 		event.preventDefault();
+		globalShortcut.unregisterAll();
+		quick.destroy();
 		await daemon.stop().catch(() => {});
 		app.exit(0);
 	});

@@ -4,6 +4,10 @@ const api = window.opencontext;
 const $ = (selector) => document.querySelector(selector);
 const REPO_URL = "https://github.com/gatesenman/opencontext-desktop";
 
+/** Electron wraps IPC failures with a noisy prefix users should never see. */
+const reason = (error) =>
+	String(error?.message ?? error).replace(/^Error invoking remote method '[^']*':\s*(Error:\s*)?/, "");
+
 let info = null;
 let daemonStatus = { status: "stopped" };
 
@@ -97,24 +101,97 @@ function renderStatus(status) {
 	$("#ovInfo").innerHTML = html;
 }
 
-function renderResults(target, items, emptyText) {
+/** Query words worth highlighting in a result: latin words + CJK bigrams. */
+function highlightTerms(query) {
+	const text = String(query ?? "")
+		.toLowerCase()
+		.trim();
+	if (!text) return [];
+	const latin = text.match(/[a-z0-9_]{2,}/g) ?? [];
+	const cjk = text.match(/[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]+/g) ?? [];
+	const grams = [];
+	for (const run of cjk) {
+		if (run.length === 1) grams.push(run);
+		for (let i = 0; i + 2 <= run.length; i += 1) grams.push(run.slice(i, i + 2));
+	}
+	return [...new Set([...latin, ...grams])].sort((a, b) => b.length - a.length).slice(0, 24);
+}
+
+/** Highlights on already escaped text, so user content can never inject markup. */
+function highlight(content, terms) {
+	let html = escapeHtml(content);
+	for (const term of terms) {
+		const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		html = html.replace(new RegExp(pattern, "gi"), (match) => `<mark>${match}</mark>`);
+	}
+	return html;
+}
+
+function renderResults(target, items, emptyText, query = "") {
 	const box = $(target);
 	if (!items || items.length === 0) {
 		box.innerHTML = `<div class="empty">${escapeHtml(emptyText)}</div>`;
 		return;
 	}
+	const terms = highlightTerms(query);
 	box.innerHTML = items
 		.map(
 			(item) => `<article class="result">
-				<p>${escapeHtml(item.content)}</p>
+				<p>${highlight(item.content, terms)}</p>
 				<footer class="muted">
 					<span>${escapeHtml(timeAgo(item.ts))}</span>
 					${item.score !== undefined ? `<span>匹配度 ${escapeHtml(item.score)}</span>` : ""}
-					<span class="mono">${escapeHtml(item.id)}</span>
+					<button class="link" data-copy="${escapeHtml(item.id)}">复制</button>
+					<button class="link danger" data-delete="${escapeHtml(item.id)}">删除</button>
 				</footer>
 			</article>`,
 		)
 		.join("");
+}
+
+/** One delegated handler covers both the search results and the recent list. */
+async function onResultAction(event) {
+	const copyId = event.target.dataset?.copy;
+	const deleteId = event.target.dataset?.delete;
+	if (!copyId && !deleteId) return;
+	const card = event.target.closest(".result");
+	const text = card?.querySelector("p")?.textContent ?? "";
+
+	if (copyId) {
+		await api.clipboard.write(text);
+		event.target.textContent = "已复制";
+		setTimeout(() => {
+			event.target.textContent = "复制";
+		}, 1200);
+		return;
+	}
+
+	event.target.disabled = true;
+	try {
+		await api.memory.remove(deleteId);
+		card?.remove();
+		offerUndo(deleteId);
+		await refreshRecent();
+	} catch (error) {
+		$("#listHint").textContent = `删除失败：${reason(error)}`;
+		event.target.disabled = false;
+	}
+}
+
+/** Deleting is one click, so always leave a way back. */
+function offerUndo(id) {
+	const hint = $("#listHint");
+	hint.innerHTML = '已删除一条记录。<button class="link" id="btnUndo">撤销</button>';
+	$("#btnUndo").addEventListener("click", async () => {
+		$("#btnUndo").disabled = true;
+		try {
+			await api.memory.restore(id);
+			hint.textContent = "已恢复这条记录。";
+			await refreshRecent();
+		} catch (error) {
+			hint.textContent = `恢复失败：${reason(error)}`;
+		}
+	});
 }
 
 async function refreshRecent() {
@@ -123,7 +200,60 @@ async function refreshRecent() {
 		$("#totalPill").textContent = `共 ${total} 条`;
 		renderResults("#recentList", items, "还没有任何记录，先在上面写一条试试。");
 	} catch (error) {
-		renderResults("#recentList", [], `读取失败：${error.message}`);
+		renderResults("#recentList", [], `读取失败：${reason(error)}`);
+	}
+}
+
+/** Copy-paste snippets so nobody has to read the API docs to wire a tool up. */
+function aiSnippets() {
+	const settings = info?.config.settings ?? {};
+	const url = daemonStatus.url ?? `http://${settings.host ?? "127.0.0.1"}:${settings.port ?? 7421}`;
+	const user = settings.userId ?? "me";
+	const body = (payload) => `curl -s ${url}${payload.path} -H "Content-Type: application/json" -d '${JSON.stringify(payload.body)}'`;
+	return {
+		url,
+		search: body({ path: "/v1/search", body: { userId: user, query: "我的偏好", limit: 5 } }),
+		write: body({
+			path: "/v1/raw-messages",
+			body: {
+				userId: user,
+				embedOnInsert: false,
+				messages: [
+					{
+						messageId: `note-${Date.now()}`,
+						userId: user,
+						content: "要记住的内容",
+						platform: "api",
+						botId: "api",
+						timestamp: Date.now(),
+						createdAt: Date.now(),
+					},
+				],
+			},
+		}),
+	};
+}
+
+async function copyAi(kind, button) {
+	const snippets = aiSnippets();
+	await api.clipboard.write(snippets[kind]);
+	$("#aiHint").textContent = "已复制到剪贴板";
+	const original = button.textContent;
+	button.textContent = "已复制 ✓";
+	setTimeout(() => {
+		button.textContent = original;
+	}, 1400);
+}
+
+async function exportNotes(format, hintTarget) {
+	$(hintTarget).textContent = "正在导出…";
+	try {
+		const result = await api.memory.export(format);
+		$(hintTarget).textContent = result.canceled
+			? "已取消导出。"
+			: `已导出 ${result.total} 条到 ${result.filePath}`;
+	} catch (error) {
+		$(hintTarget).textContent = `导出失败：${reason(error)}`;
 	}
 }
 
@@ -143,6 +273,10 @@ function renderSettings(settings) {
 	$("#cfEmbedUrl").value = settings.embeddedUrl;
 	$("#cfAutoStart").checked = settings.autoStartDaemon;
 	$("#cfAutoUpdate").checked = settings.autoCheckUpdates;
+	$("#cfTray").checked = settings.trayEnabled;
+	$("#cfCloseTray").checked = settings.closeToTray;
+	$("#cfLaunch").checked = settings.launchAtLogin;
+	$("#cfHotkey").value = settings.quickCaptureHotkey ?? "";
 	$("#mUser").value = settings.userId;
 }
 
@@ -163,6 +297,10 @@ function collectSettings() {
 		embeddedUrl: $("#cfEmbedUrl").value.trim(),
 		autoStartDaemon: $("#cfAutoStart").checked,
 		autoCheckUpdates: $("#cfAutoUpdate").checked,
+		trayEnabled: $("#cfTray").checked,
+		closeToTray: $("#cfCloseTray").checked,
+		launchAtLogin: $("#cfLaunch").checked,
+		quickCaptureHotkey: $("#cfHotkey").value.trim(),
 	};
 }
 
@@ -181,6 +319,8 @@ function renderUpdate(status) {
 	$("#upDot").className = `dot ${dot}`;
 	$("#upStatus").textContent = text;
 	$("#upBar").style.width = `${status.percent ?? 0}%`;
+	/** An empty progress bar just looks like a stray line. */
+	$("#upBar").parentElement.hidden = status.status !== "downloading";
 	$("#upDetail").textContent = status.error ?? "";
 	$("#btnDownloadUpdate").hidden = status.status !== "available";
 	$("#btnInstallUpdate").hidden = status.status !== "ready";
@@ -254,7 +394,7 @@ $("#btnSave").addEventListener("click", async () => {
 		$("#saveHint").textContent = `已记住 ✓ ${timeAgo(saved.ts)}`;
 		await refreshRecent();
 	} catch (error) {
-		$("#saveHint").textContent = `没记住：${error.message}`;
+		$("#saveHint").textContent = `没记住：${reason(error)}`;
 	} finally {
 		button.disabled = false;
 	}
@@ -262,15 +402,20 @@ $("#btnSave").addEventListener("click", async () => {
 
 async function doSearch() {
 	const button = $("#btnSearch");
+	const query = $("#searchText").value;
+	if (!query.trim()) {
+		$("#searchMode").textContent = "先在上面的框里写几个关键词。";
+		return;
+	}
 	button.disabled = true;
 	$("#searchMode").textContent = "搜索中…";
 	try {
-		const result = await api.memory.search({ query: $("#searchText").value, limit: 10 });
+		const result = await api.memory.search({ query, limit: 10 });
 		$("#searchMode").textContent = result.note ?? "";
-		renderResults("#searchResults", result.items, "没找到相关内容，换个词再试，或在设置里打开智能搜索。");
+		renderResults("#searchResults", result.items, "没找到相关内容，换个词再试，或在设置里打开智能搜索。", query);
 	} catch (error) {
 		$("#searchMode").textContent = "";
-		renderResults("#searchResults", [], `搜索失败：${error.message}`);
+		renderResults("#searchResults", [], `搜索失败：${reason(error)}`);
 	} finally {
 		button.disabled = false;
 	}
@@ -281,6 +426,19 @@ $("#searchText").addEventListener("keydown", (event) => {
 	if (event.key === "Enter") doSearch();
 });
 $("#btnRefreshRecent").addEventListener("click", refreshRecent);
+$("#btnQuick").addEventListener("click", () => api.quick.show());
+$("#recentList").addEventListener("click", onResultAction);
+$("#searchResults").addEventListener("click", onResultAction);
+$("#btnExportMd").addEventListener("click", () => exportNotes("md", "#listHint"));
+$("#btnExportJson").addEventListener("click", () => exportNotes("json", "#settingsHint"));
+
+$("#btnCopyUrl").addEventListener("click", (event) => copyAi("url", event.target));
+$("#btnCopySearch").addEventListener("click", (event) => copyAi("search", event.target));
+$("#btnCopyWrite").addEventListener("click", (event) => copyAi("write", event.target));
+$("#btnOpenService").addEventListener("click", () => {
+	const url = aiSnippets().url;
+	if (url) api.openExternal(url);
+});
 
 /* ── wiring：帮助 / 设置 / 更新 ──────────────────────────── */
 
@@ -388,6 +546,7 @@ api.on.daemonStatus(renderStatus);
 api.on.daemonLog((entry) => appendLogLine($("#logBox"), entry));
 api.on.appLog((entry) => appendLogLine($("#logBox"), entry));
 api.on.updateStatus(renderUpdate);
+api.on.memoryChanged(() => refreshRecent());
 
 (async () => {
 	try {
@@ -401,6 +560,6 @@ api.on.updateStatus(renderUpdate);
 		for (const entry of await api.daemon.logs()) appendLogLine($("#logBox"), entry);
 		setInterval(async () => renderStatus(await api.daemon.status()), 5000);
 	} catch (error) {
-		$("#hHint").textContent = `界面初始化失败：${error.message}`;
+		$("#hHint").textContent = `界面初始化失败：${reason(error)}`;
 	}
 })();

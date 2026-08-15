@@ -13,7 +13,7 @@
 		<div class="shell">
 			<aside class="side">
 				<div class="title">
-					<span>OpenContext</span>
+					<span class="brandline"><span class="mark">OC</span>OpenContext</span>
 					<span class="muted mono" id="sideVersion">v—</span>
 				</div>
 				<button class="nav active" data-view="home">首页</button>
@@ -47,21 +47,22 @@
 							<strong id="hTitle">正在检查服务…</strong>
 							<span class="muted" id="hHint">稍等一下，桌面端正在启动本地服务。</span>
 						</div>
-						<div class="row" style="margin-left: auto">
+						<div class="row actions">
 							<button class="primary" id="hFix" hidden>启动服务</button>
+							<button id="btnQuick">快速记一条</button>
 							<button id="hDetailToggle">技术详情</button>
 						</div>
 					</div>
-					<dl class="kv" id="hDetail" hidden style="margin: 12px 2px 0"></dl>
+					<dl class="kv inset" id="hDetail" hidden></dl>
 
-					<div class="card stack" style="margin-top: 16px">
-						<div class="row" style="justify-content: space-between">
-							<strong>① 记一条</strong>
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec"><span class="badge">1</span>记一条</strong>
 							<span class="muted">想让它记住的任何事，写下来就行</span>
 						</div>
 						<textarea id="noteText" class="plain" placeholder="例如：我家路由器管理密码是 admin888；孩子的钢琴课每周六上午十点。"></textarea>
 						<div class="row">
-							<span class="field" style="flex: 1; margin: 0; max-width: 260px">
+							<span class="field grow cap">
 								<input id="noteTag" placeholder="分类标签（可留空，如 生活 / 工作）" />
 							</span>
 							<button class="primary big" id="btnSave">记住它</button>
@@ -69,13 +70,13 @@
 						</div>
 					</div>
 
-					<div class="card stack" style="margin-top: 14px">
-						<div class="row" style="justify-content: space-between">
-							<strong>② 搜一下</strong>
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec"><span class="badge">2</span>搜一下</strong>
 							<span class="muted" id="searchMode"></span>
 						</div>
 						<div class="row">
-							<span class="field" style="flex: 1; margin: 0">
+							<span class="field grow">
 								<input id="searchText" placeholder="用一句话或几个关键词提问，例如：路由器密码" />
 							</span>
 							<button class="primary big" id="btnSearch">搜索</button>
@@ -85,15 +86,33 @@
 						</div>
 					</div>
 
-					<div class="card stack" style="margin-top: 14px">
-						<div class="row" style="justify-content: space-between">
-							<strong>最近记住的</strong>
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">最近记住的</strong>
 							<div class="row">
 								<span class="pill" id="totalPill">共 0 条</span>
+								<button id="btnExportMd">导出备份</button>
 								<button id="btnRefreshRecent">刷新</button>
 							</div>
 						</div>
 						<div id="recentList" class="results"><div class="empty">还没有任何记录。</div></div>
+						<span class="muted" id="listHint"></span>
+					</div>
+
+					<div class="card stack">
+						<div class="row between">
+							<strong class="sec">让 AI 工具用上这些记忆（可选）</strong>
+							<span class="muted" id="aiHint"></span>
+						</div>
+						<div class="muted">
+							服务在本机提供 HTTP 接口，会写代码或会用自动化工具的人（也可以直接把下面内容发给 AI）就能读写这些记忆。写入示例可以直接用；检索接口需要先在设置里开启智能搜索。
+						</div>
+						<div class="row">
+							<button id="btnCopyUrl">复制服务地址</button>
+							<button id="btnCopySearch">复制检索示例</button>
+							<button id="btnCopyWrite">复制写入示例</button>
+							<button id="btnOpenService">用浏览器打开</button>
+						</div>
 					</div>
 				</section>
 
@@ -128,9 +147,21 @@
 							<div class="muted">不用管，桌面端会自动往后找一个空闲端口；也可以在设置里改成别的端口。</div>
 						</details>
 						<details>
+							<summary>怎么随时快速记一条？</summary>
+							<div class="muted">
+								桌面端在系统托盘常驻：点托盘图标菜单里的“快速记一条…”，或按快捷键 Control+Alt+O，会弹出一个小窗，写完按 Ctrl+Enter 保存。关闭主窗口不会停掉服务。
+							</div>
+						</details>
+						<details>
+							<summary>怎么备份，或者换一台电脑？</summary>
+							<div class="muted">
+								首页点“导出备份”可导出 Markdown（设置里还能导出 JSON）；也可以直接把整个数据目录复制到新电脑的相同位置。
+							</div>
+						</details>
+						<details>
 							<summary>怎么让 AI 工具用上这些记忆？</summary>
 							<div class="muted">
-								服务提供本地 HTTP 接口（/v1/search 等），支持 MCP 的客户端可以直接接入；接口地址显示在首页“技术详情”里。
+								服务在本机提供 HTTP 接口（/v1/search 检索、/v1/raw-messages 写入）。首页最下面的“让 AI 工具用上这些记忆”里可以一键复制地址和调用示例。
 							</div>
 						</details>
 						<div class="row">
@@ -159,16 +190,24 @@
 						</div>
 						<label class="check"><input type="checkbox" id="cfAutoStart" /> 打开应用时自动启动服务（推荐）</label>
 						<label class="check"><input type="checkbox" id="cfAutoUpdate" /> 自动检查并下载新版本（推荐）</label>
+						<label class="check"><input type="checkbox" id="cfTray" /> 在系统托盘常驻（推荐，随时快速记一条）</label>
+						<label class="check"><input type="checkbox" id="cfCloseTray" /> 关闭窗口时只收进托盘，服务继续运行</label>
+						<label class="check"><input type="checkbox" id="cfLaunch" /> 开机自动启动（安装版生效）</label>
+						<div class="field mid">
+							<label>“快速记一条”快捷键（留空表示不用快捷键）</label>
+							<input id="cfHotkey" placeholder="Control+Alt+O" />
+						</div>
 						<div class="row">
 							<button class="primary" id="btnSaveSettings">保存</button>
 							<button id="btnSaveRestart">保存并重启服务</button>
 							<button id="btnOpenData">打开数据目录</button>
+							<button id="btnExportJson">导出 JSON 备份</button>
 							<span class="muted" id="settingsHint"></span>
 						</div>
 
 						<details class="adv">
 							<summary>高级设置（不懂就别改）</summary>
-							<div class="grid-2" style="margin-top: 12px">
+							<div class="grid-2 pad-top">
 								<div class="field"><label>监听地址</label><input id="cfHost" /></div>
 								<div class="field"><label>端口（被占用时自动顺延）</label><input id="cfPort" type="number" /></div>
 								<div class="field">
@@ -214,7 +253,7 @@
 					<h2>关于与更新</h2>
 					<div class="sub">通过 GitHub Releases 分发，发现新版本可一键更新。</div>
 					<div class="card stack">
-						<div class="bar"><i id="upBar"></i></div>
+						<div class="bar" hidden><i id="upBar"></i></div>
 						<div class="row">
 							<span class="pill"><span class="dot" id="upDot"></span><span id="upStatus">未检查</span></span>
 							<button id="btnCheckUpdate">检查更新</button>
@@ -232,7 +271,7 @@
 					<h2>服务状态</h2>
 					<div class="sub">本地 OpenContext 服务进程状态与运行参数。</div>
 					<div class="card stack">
-						<div class="row" style="justify-content: space-between">
+						<div class="row between">
 							<div class="row">
 								<span class="dot" id="ovDot"></span>
 								<strong id="ovStatus">未启动</strong>
@@ -245,9 +284,9 @@
 								<button id="btnHealth">健康检查</button>
 							</div>
 						</div>
-						<div id="ovError" class="mono" style="color: var(--fail)"></div>
+						<div id="ovError" class="mono error"></div>
 						<dl class="kv" id="ovInfo"></dl>
-						<div class="log" id="ovOut" style="height: 140px"></div>
+						<div class="log sm" id="ovOut"></div>
 					</div>
 				</section>
 
@@ -271,15 +310,15 @@
 							<button class="primary" id="btnStore">POST /v1/raw-messages</button>
 						</div>
 						<div class="row">
-							<span class="field" style="flex: 1; margin: 0"><input id="sQuery" value="用户有什么偏好？" /></span>
-							<span class="field" style="width: 90px; margin: 0"><input id="sLimit" type="number" value="5" /></span>
+							<span class="field grow"><input id="sQuery" value="用户有什么偏好？" /></span>
+							<span class="field num"><input id="sLimit" type="number" value="5" /></span>
 							<button id="btnSearchApi">POST /v1/search</button>
 						</div>
 						<div class="row">
-							<span class="field" style="flex: 1; margin: 0"><input id="sMessageId" placeholder="messageId" /></span>
+							<span class="field grow"><input id="sMessageId" placeholder="messageId" /></span>
 							<button id="btnGetMessage">GET /v1/raw-messages/:id</button>
 						</div>
-						<div class="log" id="apiOut" style="height: 220px"></div>
+						<div class="log md" id="apiOut"></div>
 					</div>
 				</section>
 
@@ -289,7 +328,7 @@
 					<div class="sub">在应用内打开本地服务地址，也可以换成任意自建前端地址。</div>
 					<div class="card stack">
 						<div class="row">
-							<span class="field" style="flex: 1; margin: 0"><input id="eUrl" /></span>
+							<span class="field grow"><input id="eUrl" /></span>
 							<button id="btnLoadEmbed">加载</button>
 							<button id="btnSaveEmbed">保存为默认</button>
 							<button id="btnOpenBrowser">用浏览器打开</button>
@@ -307,7 +346,7 @@
 							<button id="btnOpenLogs">打开日志目录</button>
 							<button id="btnClearLogs">清空视图</button>
 						</div>
-						<div class="log" id="logBox" style="height: 52vh"></div>
+						<div class="log tall" id="logBox"></div>
 					</div>
 				</section>
 			</main>

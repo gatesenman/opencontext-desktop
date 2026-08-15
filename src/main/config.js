@@ -31,6 +31,12 @@ const DEFAULTS = {
 		chromaUrl: "",
 		autoStartDaemon: true,
 		autoCheckUpdates: true,
+		/** Keep a tray icon so the service can stay up while the window is closed. */
+		trayEnabled: true,
+		closeToTray: true,
+		launchAtLogin: false,
+		/** Global hotkey for the quick capture window; empty disables it. */
+		quickCaptureHotkey: "Control+Alt+O",
 		/** Optional external URL to embed instead of the built-in panel. */
 		embeddedUrl: "",
 		npmRegistry: "",

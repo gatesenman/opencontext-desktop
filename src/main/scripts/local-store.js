@@ -6,7 +6,7 @@
  * with the OpenContext runtime).
  *
  * Usage: node local-store.js <action> <json-payload>
- * Actions: recent | search | count
+ * Actions: recent | search | count | all | delete | restore
  */
 
 const fs = require("node:fs");
@@ -15,9 +15,12 @@ const path = require("node:path");
 const [action, rawPayload] = process.argv.slice(2);
 const payload = JSON.parse(rawPayload ?? "{}");
 
-function openDatabase() {
+function openDatabase(writable = false) {
 	const Database = require(path.join(payload.serverDir, "node_modules", "better-sqlite3"));
-	return new Database(payload.dbFile, { readonly: true, fileMustExist: true });
+	const db = new Database(payload.dbFile, { readonly: !writable, fileMustExist: true });
+	/** The daemon holds the same file open, so never fail instantly on a lock. */
+	db.pragma("busy_timeout = 4000");
+	return db;
 }
 
 function rowToItem(row) {
@@ -72,7 +75,7 @@ function run() {
 	if (!fs.existsSync(payload.dbFile)) {
 		return { ok: true, items: [], total: 0, empty: true };
 	}
-	const db = openDatabase();
+	const db = openDatabase(action === "delete" || action === "restore");
 	try {
 		const table = db
 			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'raw_messages'")
@@ -97,6 +100,34 @@ function run() {
 				)
 				.all(payload.userId, Math.min(Number(payload.limit) || 20, 200));
 			return { ok: true, items: rows.map(rowToItem) };
+		}
+
+		if (action === "all") {
+			const rows = db
+				.prepare(
+					`SELECT message_id, content, timestamp, created_at, platform, embedding
+					 FROM raw_messages
+					 WHERE user_id = ? AND deprecated_at IS NULL
+					 ORDER BY timestamp ASC, id ASC`,
+				)
+				.all(payload.userId);
+			return { ok: true, items: rows.map(rowToItem) };
+		}
+
+		/** Soft delete: the runtime already treats deprecated rows as gone. */
+		if (action === "delete") {
+			const result = db
+				.prepare("UPDATE raw_messages SET deprecated_at = ? WHERE user_id = ? AND message_id = ?")
+				.run(Date.now(), payload.userId, String(payload.id ?? ""));
+			return { ok: true, removed: result.changes };
+		}
+
+		/** Undo for an accidental delete. */
+		if (action === "restore") {
+			const result = db
+				.prepare("UPDATE raw_messages SET deprecated_at = NULL WHERE user_id = ? AND message_id = ?")
+				.run(payload.userId, String(payload.id ?? ""));
+			return { ok: true, restored: result.changes };
 		}
 
 		if (action === "search") {

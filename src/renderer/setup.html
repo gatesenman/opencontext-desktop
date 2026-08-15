@@ -12,6 +12,7 @@
 	<body>
 		<div class="setup">
 			<div class="brand">
+				<span class="mark lg">OC</span>
 				<h1>欢迎使用 OpenContext</h1>
 				<span class="pill" id="appVersion">v—</span>
 			</div>
@@ -20,7 +21,7 @@
 				所有内容都只保存在这台电脑上。
 			</p>
 
-			<div class="card stack" style="margin-top: 18px">
+			<div class="card stack">
 				<div class="row">
 					<span class="dot busy" id="stateDot"></span>
 					<strong id="stateText">正在检查电脑环境…</strong>
@@ -42,26 +43,26 @@
 
 				<details id="progressDetails" hidden>
 					<summary>查看安装过程（出问题时把这里的内容发给开发者）</summary>
-					<div class="steps" style="margin: 12px 0 14px">
+					<div class="steps">
 						<div class="step" data-step="node">
 							<span class="dot"></span>
 							<div>
 								<div><strong>准备运行环境</strong> <span class="muted" data-msg>等待中</span></div>
-								<div class="bar" style="margin-top: 6px"><i></i></div>
+								<div class="bar"><i></i></div>
 							</div>
 						</div>
 						<div class="step" data-step="deps">
 							<span class="dot"></span>
 							<div>
 								<div><strong>下载 OpenContext</strong> <span class="muted" data-msg>等待中</span></div>
-								<div class="bar" style="margin-top: 6px"><i></i></div>
+								<div class="bar"><i></i></div>
 							</div>
 						</div>
 						<div class="step" data-step="verify">
 							<span class="dot"></span>
 							<div>
 								<div><strong>启动并自检</strong> <span class="muted" data-msg>等待中</span></div>
-								<div class="bar" style="margin-top: 6px"><i></i></div>
+								<div class="bar"><i></i></div>
 							</div>
 						</div>
 					</div>
@@ -69,7 +70,7 @@
 				</details>
 			</div>
 
-			<p class="muted mono" id="dataDir" style="margin-top: 14px"></p>
+			<p class="muted mono datadir" id="dataDir"></p>
 		</div>
 		<script src="setup.js"></script>
 	</body>
