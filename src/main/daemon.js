@@ -6,7 +6,7 @@ const { EventEmitter } = require("node:events");
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
-const { isWindows, resolveToolchain } = require("./toolchain");
+const { isWindows, resolveToolchain, toolchainEnv } = require("./toolchain");
 const { findFreePort, daemonEntry } = require("./env-check");
 
 const emitter = new EventEmitter();
@@ -141,7 +141,7 @@ async function start() {
 
 	const child = spawn(toolchain.nodePath, [entry, ...args], {
 		cwd: paths.dataDir,
-		env: daemonEnv(),
+		env: daemonEnv(toolchainEnv(toolchain)),
 		windowsHide: true,
 	});
 	state.child = child;
@@ -209,7 +209,7 @@ async function probeDaemon(toolchain) {
 	const child = spawn(
 		resolved.nodePath,
 		[entry, "http", "--host", host, "--port", String(port), "--memory-backend", "sqlite-vec"],
-		{ cwd: paths.dataDir, env: daemonEnv(), windowsHide: true },
+		{ cwd: paths.dataDir, env: daemonEnv(toolchainEnv(resolved)), windowsHide: true },
 	);
 	let output = "";
 	child.stdout.on("data", (chunk) => {

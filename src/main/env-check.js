@@ -7,7 +7,13 @@ const { app } = require("electron");
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
-const { MIN_NODE_MAJOR, isWindows, resolveToolchain, platformLabel } = require("./toolchain");
+const {
+	SUPPORTED_NODE_LABEL,
+	isWindows,
+	parseMajor,
+	resolveToolchain,
+	platformLabel,
+} = require("./toolchain");
 
 const SUPPORTED_PLATFORMS = new Set(["linux", "darwin", "win32"]);
 const SUPPORTED_ARCH = new Set(["x64", "arm64"]);
@@ -23,6 +29,27 @@ function daemonEntry() {
 		"cli",
 		"opencontext.js",
 	);
+}
+
+/**
+ * Native modules under serverDir are built for one Node.js ABI. The installer
+ * records which Node.js version built them, so a later switch to another major
+ * (or an install from before this marker existed) can be detected and rebuilt.
+ */
+function builtWithFile() {
+	return path.join(paths.serverDir, ".built-with-node");
+}
+
+function runtimeBuiltWith() {
+	try {
+		return fs.readFileSync(builtWithFile(), "utf8").trim() || null;
+	} catch {
+		return null;
+	}
+}
+
+function runtimeMatchesToolchain(toolchain) {
+	return Boolean(toolchain?.ok) && parseMajor(runtimeBuiltWith()) === parseMajor(toolchain.nodeVersion);
 }
 
 function installedRuntimeVersion() {
@@ -116,11 +143,11 @@ async function runChecks() {
 	const toolchain = await resolveToolchain();
 	results.push({
 		id: "node",
-		label: `运行环境 Node.js（需 ${MIN_NODE_MAJOR} 以上）`,
+		label: `运行环境 Node.js（需 ${SUPPORTED_NODE_LABEL}）`,
 		status: toolchain.ok ? "ok" : "warn",
 		detail: toolchain.ok
 			? `${toolchain.nodeVersion} · ${toolchain.source === "managed" ? "应用内置" : "系统安装"} · ${toolchain.nodePath}`
-			: "本机没有可用版本，安装时会自动下载一份自用的",
+			: `本机没有 ${SUPPORTED_NODE_LABEL} 版本，安装时会自动下载一份自用的`,
 		fixable: !toolchain.ok,
 	});
 
@@ -148,15 +175,18 @@ async function runChecks() {
 
 	const runtimeVersion = installedRuntimeVersion();
 	const entryExists = fs.existsSync(daemonEntry());
+	const runtimePresent = Boolean(runtimeVersion && entryExists);
+	const runtimeReady = runtimePresent && (!toolchain.ok || runtimeMatchesToolchain(toolchain));
 	results.push({
 		id: "runtime",
 		label: "OpenContext 程序",
-		status: runtimeVersion && entryExists ? "ok" : "warn",
-		detail:
-			runtimeVersion && entryExists
+		status: runtimeReady ? "ok" : "warn",
+		detail: !runtimePresent
+			? "还没安装，会自动装到本机数据目录"
+			: runtimeReady
 				? `@melandlabs/opencontext ${runtimeVersion}`
-				: "还没安装，会自动装到本机数据目录",
-		fixable: !(runtimeVersion && entryExists),
+				: `@melandlabs/opencontext ${runtimeVersion}，本地依赖需用 Node.js ${toolchain.nodeVersion} 重新编译`,
+		fixable: !runtimeReady,
 	});
 
 	const port = await findFreePort(settings.port, settings.host);
@@ -190,4 +220,26 @@ async function runChecks() {
 	return summary;
 }
 
-module.exports = { runChecks, findFreePort, daemonEntry, installedRuntimeVersion, REGISTRY_FALLBACK };
+/**
+ * An install marked complete can still be unusable: older app versions accepted
+ * Node.js 20, on which the current runtime crashes (SIGSEGV) at startup, and
+ * native modules break when the Node.js major changes. Returns a reason when
+ * the recorded install no longer matches a supported toolchain, so the caller
+ * can send the user back through setup instead of starting a daemon that will
+ * crash.
+ */
+async function staleInstallReason() {
+	if (!config.get().installed) return null;
+	const toolchain = await resolveToolchain();
+	if (!toolchain.ok) return `找不到 ${SUPPORTED_NODE_LABEL} 版本的 Node.js`;
+	if (!runtimeMatchesToolchain(toolchain)) {
+		return `运行时的本地依赖由 Node.js ${runtimeBuiltWith() ?? "未知版本"} 编译，当前为 ${toolchain.nodeVersion}`;
+	}
+	return null;
+}
+
+module.exports = {
+	runChecks,
+	staleInstallReason,
+	builtWithFile,
+	runtimeBuiltWith, findFreePort, daemonEntry, installedRuntimeVersion, REGISTRY_FALLBACK };
