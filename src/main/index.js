@@ -6,7 +6,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard, globalShort
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
-const { runChecks } = require("./env-check");
+const { runChecks, staleInstallReason } = require("./env-check");
 const { install } = require("./installer");
 const daemon = require("./daemon");
 const memory = require("./memory");
@@ -347,6 +347,12 @@ if (singleInstance()) {
 		quick.setFallback(() => showMain());
 		quickSearch.setFallback(() => showMain());
 		daemon.emitter.on("status", () => access.syncProxy().catch(() => {}));
+
+		const stale = await staleInstallReason();
+		if (stale) {
+			logger.warn("app", `需要重新安装运行时：${stale}`);
+			config.patch({ installed: false });
+		}
 
 		applyTray();
 		/** Starting hidden only makes sense when the tray icon really exists. */

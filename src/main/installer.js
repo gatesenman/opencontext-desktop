@@ -5,17 +5,23 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
 const { pipeline } = require("node:stream/promises");
-const { Readable } = require("node:stream");
+const { Readable, Transform } = require("node:stream");
 const tar = require("tar-fs");
 const yauzl = require("yauzl");
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
-const { isWindows, resolveToolchain, runNpm } = require("./toolchain");
-const { daemonEntry, installedRuntimeVersion, REGISTRY_FALLBACK } = require("./env-check");
+const { isWindows, resolveToolchain, runNpm, isSupportedNode, parseMajor } = require("./toolchain");
+const {
+	daemonEntry,
+	installedRuntimeVersion,
+	builtWithFile,
+	runtimeBuiltWith,
+	REGISTRY_FALLBACK,
+} = require("./env-check");
 const { probeDaemon } = require("./daemon");
 
-const FALLBACK_NODE_VERSION = "v20.19.4";
+const FALLBACK_NODE_VERSION = "v22.23.5";
 const RUNTIME_PACKAGES = ["@melandlabs/opencontext", "@melandlabs/ai-rag"];
 
 let running = false;
@@ -27,7 +33,7 @@ function nodeArchiveName(version) {
 	return `node-${version}-${platform}-${arch}.tar.gz`;
 }
 
-/** Newest LTS line that is still ≥ 20, so the daemon's native deps have prebuilds. */
+/** Newest LTS release in the supported range, so the daemon's native deps have prebuilds. */
 async function resolveNodeVersion(mirror) {
 	try {
 		const response = await fetch(`${mirror.replace(/\/$/, "")}/index.json`, {
@@ -35,7 +41,7 @@ async function resolveNodeVersion(mirror) {
 		});
 		if (!response.ok) throw new Error(`HTTP ${response.status}`);
 		const entries = await response.json();
-		const lts = entries.filter((entry) => entry.lts && Number(entry.version.slice(1).split(".")[0]) >= 20);
+		const lts = entries.filter((entry) => entry.lts && isSupportedNode(entry.version));
 		return lts[0]?.version ?? FALLBACK_NODE_VERSION;
 	} catch (error) {
 		logger.warn("installer", `无法读取 Node 版本清单（${error.message}），回退到 ${FALLBACK_NODE_VERSION}`);
@@ -62,15 +68,26 @@ async function downloadFile(url, destination, onProgress) {
 	if (!response.ok || !response.body) throw new Error(`下载失败 ${url} — HTTP ${response.status}`);
 	const total = Number(response.headers.get("content-length") ?? 0);
 	let received = 0;
-	const hash = crypto.createHash("sha256");
-	const source = Readable.fromWeb(response.body);
-	source.on("data", (chunk) => {
-		received += chunk.length;
-		hash.update(chunk);
-		if (total) onProgress?.(Math.min(99, Math.round((received / total) * 100)), received, total);
+	// In Electron's main process the chunks coming out of a fetch body can be
+	// reused before fs.WriteStream flushes them, which silently corrupted the
+	// archive on disk while a hash computed on the fly still matched. Copy each
+	// chunk before handing it on, and checksum the file that actually landed.
+	const meter = new Transform({
+		transform(chunk, _encoding, callback) {
+			const copy = Buffer.from(chunk);
+			received += copy.length;
+			if (total) onProgress?.(Math.min(99, Math.round((received / total) * 100)), received, total);
+			callback(null, copy);
+		},
 	});
-	await pipeline(source, fs.createWriteStream(destination));
-	return { digest: hash.digest("hex"), bytes: received };
+	await pipeline(Readable.fromWeb(response.body), meter, fs.createWriteStream(destination));
+	return { digest: await sha256File(destination), bytes: received };
+}
+
+async function sha256File(file) {
+	const hash = crypto.createHash("sha256");
+	await pipeline(fs.createReadStream(file), hash);
+	return hash.digest("hex");
 }
 
 async function extractTarGz(archivePath, destination) {
@@ -210,6 +227,77 @@ async function installRuntimePackages(toolchain, emit) {
 }
 
 /**
+ * Packages under serverDir that run an install script, as `name@version`.
+ * Those are the ones whose native binaries depend on the Node.js ABI
+ * (e.g. better-sqlite3 11 via prebuild-install). Packages that ship N-API
+ * prebuilds and set `gypfile: false` (better-sqlite3 13) are left out on
+ * purpose: a bare `npm rebuild` would try to compile them with node-gyp and
+ * fail on machines without a C++ toolchain.
+ */
+function packagesWithInstallScripts(root) {
+	const specs = new Set();
+	const visit = (dir) => {
+		let entries;
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+			const full = path.join(dir, entry.name);
+			if (entry.name.startsWith("@")) {
+				visit(full);
+				continue;
+			}
+			try {
+				const manifest = JSON.parse(fs.readFileSync(path.join(full, "package.json"), "utf8"));
+				const scripts = manifest.scripts ?? {};
+				if (manifest.name && manifest.version && (scripts.preinstall || scripts.install || scripts.postinstall)) {
+					specs.add(`${manifest.name}@${manifest.version}`);
+				}
+			} catch {
+				// not a package directory
+			}
+			visit(path.join(full, "node_modules"));
+		}
+	};
+	visit(root);
+	return [...specs].sort();
+}
+
+/**
+ * `npm install` leaves already-installed packages alone, so native modules
+ * built by a different Node.js major (e.g. 20 → 22), or by an install made
+ * before the marker existed, have to be rebuilt explicitly.
+ */
+async function rebuildIfNodeChanged(toolchain, emit, { freshInstall }) {
+	const previous = runtimeBuiltWith();
+	const needsRebuild = freshInstall
+		? false
+		: !previous || parseMajor(previous) !== parseMajor(toolchain.nodeVersion);
+	const specs = needsRebuild ? packagesWithInstallScripts(path.join(paths.serverDir, "node_modules")) : [];
+	if (specs.length > 0) {
+		emit({
+			step: "deps",
+			status: "running",
+			percent: 96,
+			message: `本地依赖由 ${previous || "旧版本 Node.js"} 编译，正在用 ${toolchain.nodeVersion} 重新编译：${specs.join(", ")}`,
+		});
+		const args = ["rebuild", ...specs, "--prefix", paths.serverDir, "--loglevel", "warn"];
+		const result = await runNpm(toolchain, args, {
+			cwd: paths.serverDir,
+			env: { npm_config_cache: path.join(paths.root, "npm-cache"), npm_config_update_notifier: "false" },
+			onOutput: (chunk) => logger.info("npm", chunk.trim()),
+		});
+		if (result.code !== 0) {
+			throw new Error(`npm rebuild 失败（exit ${result.code}）：${result.stderr.slice(-600) || "无输出"}`);
+		}
+	}
+	fs.writeFileSync(builtWithFile(), `${toolchain.nodeVersion}\n`);
+}
+
+/**
  * Full first-run flow: make sure a Node.js toolchain exists, install the
  * OpenContext runtime into the app data dir, then boot it once to prove the
  * install works. Marks the install as complete in config on success.
@@ -233,7 +321,9 @@ async function install(emit) {
 			});
 		}
 
+		const freshInstall = !fs.existsSync(path.join(paths.serverDir, "node_modules"));
 		const runtimeVersion = await installRuntimePackages(toolchain, emit);
+		await rebuildIfNodeChanged(toolchain, emit, { freshInstall });
 
 		emit({ step: "verify", status: "running", percent: 30, message: "启动一次本地服务做健康检查…" });
 		const probe = await probeDaemon(toolchain);
