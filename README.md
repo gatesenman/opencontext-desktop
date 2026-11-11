@@ -6,7 +6,7 @@ A one-click desktop client for **OpenContext**, a local memory store that runs e
 
 ## Features
 
-- **First-run setup**: checks the platform (Linux / macOS / Windows, x64 / arm64), Node.js, npm, the npm registry and the port, then installs everything with one click. If the machine has no suitable Node.js (≥ 20), it downloads a managed Node.js LTS from `nodejs.org`. It then installs `@melandlabs/opencontext` and `@melandlabs/ai-rag` into the app data directory and runs a health check.
+- **First-run setup**: checks the platform (Linux / macOS / Windows, x64 / arm64), Node.js, npm, the npm registry and the port, then installs everything with one click. If the machine has no Node.js 22.x (the only line the runtime's native modules support: better-sqlite3 13 needs ≥ 22, and better-sqlite3 11 has no prebuilt binaries for 24+), it downloads a managed Node.js 22 LTS from `nodejs.org`. It then installs `@melandlabs/opencontext` and `@melandlabs/ai-rag` into the app data directory and runs a health check.
 - **Local service management**: starts the OpenContext HTTP daemon on `127.0.0.1` (default port 7421, moves to the next free port if busy), auto-start, start / stop / restart, health check, service and desktop logs.
 - **Memory home page**: write notes (with Markdown preview), keyword search, recent memories, JSON export.
 - **Memory library**: stats, 14-day trend, tag filter, sort, paging, trash with restore / permanent delete, JSON import / export.
@@ -98,7 +98,7 @@ Environment variable: `OPENCONTEXT_NODE_PATH` makes the app try a specific Node.
 
 ## Known issues
 
-- If the system Node.js is newer than the versions that `better-sqlite3` ships prebuilt binaries for (for example Node 24), the runtime install fails while compiling `better-sqlite3`. The app prefers a system Node ≥ 20 over downloading its own. Workaround: set `OPENCONTEXT_NODE_PATH` to a Node 20 binary (and put its npm first on `PATH`).
+- None known. Installs made by earlier versions with Node.js 20 are detected on startup: the app goes back to setup, switches to Node.js 22 and rebuilds the native modules.
 
 ## Contributing
 

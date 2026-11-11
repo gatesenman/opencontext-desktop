@@ -8,7 +8,7 @@ OpenContext 桌面版：一键安装、开箱可用的本机记忆库客户端�
 
 ## 功能
 
-- **首次启动向导**：检测平台（Linux / macOS / Windows，x64 / arm64）、Node.js、npm、npm 源与端口，然后一键安装。本机没有合适的 Node.js（≥ 20）时，会从 `nodejs.org` 下载托管的 Node.js LTS；接着把 `@melandlabs/opencontext` 和 `@melandlabs/ai-rag` 安装到应用数据目录，并做健康检查。
+- **首次启动向导**：检测平台（Linux / macOS / Windows，x64 / arm64）、Node.js、npm、npm 源与端口，然后一键安装。本机没有 Node.js 22.x 时（运行时的原生模块只支持这一版本：better-sqlite3 13 需要 ≥ 22，better-sqlite3 11 没有 24 及以上的预编译包），会从 `nodejs.org` 下载托管的 Node.js 22 LTS；接着把 `@melandlabs/opencontext` 和 `@melandlabs/ai-rag` 安装到应用数据目录，并做健康检查。
 - **本地服务管理**：在 `127.0.0.1` 启动 OpenContext HTTP 服务（默认端口 7421，被占用时自动顺延），支持自动启动、启动 / 停止 / 重启、健康检查、服务与桌面端日志。
 - **首页**：记一条（支持 Markdown 预览）、关键词搜索、最近记住的、导出备份。
 - **记忆库**：统计、最近 14 天趋势、按标签筛选、排序、翻页，回收站可恢复 / 彻底删除，JSON 导入 / 导出。
@@ -100,7 +100,7 @@ electron-builder.yml
 
 ## 已知问题
 
-- 如果系统 Node.js 版本较新（例如 Node 24），`better-sqlite3` 没有对应的预编译包，安装运行时会在编译 `better-sqlite3` 时失败；应用会优先使用系统中 ≥ 20 的 Node 而不是下载自带的。临时解决：把 `OPENCONTEXT_NODE_PATH` 指向 Node 20，并把它的 npm 放在 `PATH` 前面。
+- 暂无。旧版本用 Node.js 20 完成的安装会在启动时被识别出来：应用会回到安装向导，换用 Node.js 22 并重新编译原生模块。
 
 ## 参与贡献
 
