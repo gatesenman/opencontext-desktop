@@ -22,7 +22,7 @@ OpenContext 桌面版：一键安装、开箱可用的本机记忆库客户端�
 
 ## 截图
 
-以下截图是在 Linux 上用 Xvfb 启动真实的 Electron 应用、由 Playwright 操作后拍下的。首次安装确实完成了运行时的下载和安装，但在本测试环境中，OpenContext 服务（`@melandlabs/opencontext` 0.13.7）启动时以 `SIGSEGV` 崩溃，所以控制面板截图展示的是真实界面在**「服务未运行」**状态下的样子，没有数据。
+以下截图是在 Linux 上用 Xvfb 启动真实的 Electron 应用、由 Playwright 操作后拍下的。首次安装确实完成了运行时的下载和安装，但在本测试环境中，OpenContext 服务（`@melandlabs/opencontext` 0.13.7）启动时以 `SIGSEGV` 崩溃，所以控制面板截图展示的是真实界面在**「服务未运行」**状态下的样子，没有数据。由于安装后的健康检查失败，进入控制面板是手动把 `config.json` 中的 `installed` 设为 `true` 实现的。
 
 | 首次启动：环境检测 | 首次启动：安装中 |
 | --- | --- |

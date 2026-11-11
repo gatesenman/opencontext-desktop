@@ -20,7 +20,7 @@ A one-click desktop client for **OpenContext**, a local memory store that runs e
 
 ## Screenshots
 
-These were captured on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in this test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`. So the control-panel screenshots show the real UI in the **"service not running"** state, without data.
+These were captured on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in this test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`. So the control-panel screenshots show the real UI in the **"service not running"** state, without data. Because the post-install health check failed, the dashboard was opened by setting `installed: true` in `config.json` by hand.
 
 | First run: environment check | First run: installing |
 | --- | --- |
