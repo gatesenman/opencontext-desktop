@@ -20,7 +20,8 @@
     "dist:linux": "electron-builder --linux --publish never",
     "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
-    "release": "electron-builder --publish always"
+    "release": "electron-builder --publish always",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "electron-updater": "6.3.9",

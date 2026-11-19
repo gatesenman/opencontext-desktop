@@ -12,6 +12,7 @@ const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
 const { isWindows, resolveToolchain, runNpm, isSupportedNode, parseMajor } = require("./toolchain");
+const { FALLBACK_NODE_VERSION, nodeArchiveName } = require("./node-archive");
 const {
 	daemonEntry,
 	installedRuntimeVersion,
@@ -21,17 +22,9 @@ const {
 } = require("./env-check");
 const { probeDaemon } = require("./daemon");
 
-const FALLBACK_NODE_VERSION = "v22.23.5";
 const RUNTIME_PACKAGES = ["@melandlabs/opencontext", "@melandlabs/ai-rag"];
 
 let running = false;
-
-function nodeArchiveName(version) {
-	const arch = process.arch === "arm64" ? "arm64" : "x64";
-	if (isWindows) return `node-${version}-win-${arch}.zip`;
-	const platform = process.platform === "darwin" ? "darwin" : "linux";
-	return `node-${version}-${platform}-${arch}.tar.gz`;
-}
 
 /** Newest LTS release in the supported range, so the daemon's native deps have prebuilds. */
 async function resolveNodeVersion(mirror) {
@@ -349,4 +342,4 @@ async function install(emit) {
 	}
 }
 
-module.exports = { install, installNodeRuntime, resolveNodeVersion, RUNTIME_PACKAGES };
+module.exports = { install, installNodeRuntime, resolveNodeVersion, RUNTIME_PACKAGES, FALLBACK_NODE_VERSION, nodeArchiveName };
