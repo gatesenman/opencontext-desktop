@@ -4,6 +4,14 @@
 
 A one-click desktop client for **OpenContext**, a local memory store that runs entirely on your own computer. It is an Electron shell around the OpenContext agentic context runtime ([`@melandlabs/opencontext`](https://www.npmjs.com/package/@melandlabs/opencontext)). On first run it checks the environment, installs the runtime automatically and starts the local service. After that you can write, search and manage memories in a built-in control panel, and connect them to AI tools over MCP or a token-protected HTTP API. It also supports in-app updates. The UI is in Chinese.
 
+## Sample memory pack
+
+Import a fixture memory pack and search it locally, without launching the desktop window (useful when the host Node.js is newer than the Electron engine range).
+
+```bash
+node --test test/memory-pack.test.js
+```
+
 ## Features
 
 - **First-run setup**: checks the platform (Linux / macOS / Windows, x64 / arm64), Node.js, npm, the npm registry and the port, then installs everything with one click. If the machine has no Node.js 22.x (the only line the runtime's native modules support: better-sqlite3 13 needs ≥ 22, and better-sqlite3 11 has no prebuilt binaries for 24+), it downloads a managed Node.js 22 LTS from `nodejs.org`. It then installs `@melandlabs/opencontext` and `@melandlabs/ai-rag` into the app data directory and runs a health check.

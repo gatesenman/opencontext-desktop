@@ -109,3 +109,7 @@ electron-builder.yml
 ## 许可证
 
 [Apache-2.0](LICENSE)
+
+## 示例记忆包
+
+可以导入示例记忆包并在本地搜索，不必打开桌面窗口（主机 Node 24 可能超出 Electron 引擎范围时尤其有用）。
