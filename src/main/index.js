@@ -2,7 +2,7 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
-const { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard, globalShortcut } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard, globalShortcut, session } = require("electron");
 const { paths, ensureDirs } = require("./paths");
 const { config } = require("./config");
 const { logger } = require("./logger");
@@ -15,6 +15,7 @@ const tray = require("./tray");
 const quick = require("./quick-capture");
 const quickSearch = require("./quick-search");
 const access = require("./access");
+const { isAllowedExternalUrl } = require("./external-url");
 
 const RENDERER = path.join(__dirname, "..", "renderer");
 
@@ -41,7 +42,7 @@ function createWindow() {
 			preload: path.join(__dirname, "preload.js"),
 			contextIsolation: true,
 			nodeIntegration: false,
-			sandbox: false,
+			sandbox: true,
 			webviewTag: false,
 		},
 	});
@@ -59,8 +60,13 @@ function createWindow() {
 		mainWindow = null;
 	});
 	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-		shell.openExternal(url);
+		if (isAllowedExternalUrl(url, { embedUrl: config.settings.embeddedUrl })) {
+			shell.openExternal(url);
+		}
 		return { action: "deny" };
+	});
+	mainWindow.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => {
+		callback(false);
 	});
 
 	loadInitialView();
@@ -270,7 +276,13 @@ function registerIpc() {
 	ipcMain.handle("clipboard:write", (_event, text) => clipboard.writeText(String(text ?? "")));
 
 	ipcMain.handle("shell:openPath", (_event, target) => shell.openPath(target));
-	ipcMain.handle("shell:openExternal", (_event, url) => shell.openExternal(url));
+	ipcMain.handle("shell:openExternal", (_event, url) => {
+		if (!isAllowedExternalUrl(url, { embedUrl: config.settings.embeddedUrl })) {
+			logger.warn("shell", `blocked openExternal: ${url}`);
+			return { ok: false, blocked: true };
+		}
+		return shell.openExternal(url).then(() => ({ ok: true }));
+	});
 	ipcMain.handle("app:logs", () => logger.history());
 }
 
@@ -335,6 +347,9 @@ function singleInstance() {
 if (singleInstance()) {
 	app.whenReady().then(async () => {
 		ensureDirs();
+		session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
+			callback(false);
+		});
 		logger.info("app", `OpenContext Desktop ${app.getVersion()} 启动，数据目录 ${paths.root}`);
 		registerIpc();
 		buildMenu();
