@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { paths } = require("./paths");
 
 /**
  * Node.js majors the OpenContext runtime can actually run on.
@@ -65,11 +64,15 @@ function isSupportedNode(version) {
 const SUPPORTED_NODE_LABEL =
 	MIN_NODE_MAJOR === MAX_NODE_MAJOR ? `${MIN_NODE_MAJOR}.x` : `${MIN_NODE_MAJOR}.x–${MAX_NODE_MAJOR}.x`;
 
+function getPaths() {
+	return require("./paths").paths;
+}
+
 /** Directory of the managed Node.js runtime, if one was unpacked. */
 function managedRuntimeDir() {
 	try {
 		const entries = fs
-			.readdirSync(paths.runtimeDir, { withFileTypes: true })
+			.readdirSync(getPaths().runtimeDir, { withFileTypes: true })
 			.filter((entry) => entry.isDirectory() && entry.name.startsWith("node-v"))
 			.map((entry) => path.join(paths.runtimeDir, entry.name));
 		return entries.sort().pop() ?? null;
@@ -209,5 +212,6 @@ module.exports = {
 	resolveToolchain,
 	managedRuntimeDir,
 	managedNodePath,
+	getPaths,
 	platformLabel: () => `${process.platform}-${process.arch} (${os.release()})`,
 };
