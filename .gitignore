@@ -4,3 +4,16 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Additional hygiene
+Thumbs.db
+.env
+.env.local
+.env.*.local
+target/
+logs/
+.venv/
+__pycache__/
+coverage/
+!.env.example
+!.env.example.*
