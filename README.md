@@ -18,14 +18,25 @@ A one-click desktop client for **OpenContext**, a local memory store that runs e
 - **Advanced tools**: service status, API console (`POST /v1/raw-messages`, `POST /v1/search`, `GET /v1/raw-messages/:id`), embedded web page and live logs.
 - **Updates**: `electron-updater` against GitHub Releases (check, download, restart and install).
 
+## Download
+
+Current installers are on [GitHub Releases v1.3.0](https://github.com/gatesenman/opencontext-desktop/releases/tag/v1.3.0). Exact names:
+
+| Platform | File |
+| --- | --- |
+| Windows | [OpenContext-Desktop-1.3.0-win-x64.exe](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-win-x64.exe) |
+| Linux | [OpenContext-Desktop-1.3.0-linux-x86_64.AppImage](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-linux-x86_64.AppImage) / [OpenContext-Desktop-1.3.0-linux-amd64.deb](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-linux-amd64.deb) |
+| macOS | [OpenContext-Desktop-1.3.0-mac-x64.dmg](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-mac-x64.dmg) / [OpenContext-Desktop-1.3.0-mac-arm64.dmg](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-mac-arm64.dmg) (zip variants also exist) |
+
+This pass did not download those binaries to compute SHA256. Ignore `.blockmap` and `latest-*.yml` when choosing what to install.
+
 ## Screenshots
 
-These were captured on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in this test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`. So the control-panel screenshots show the real UI in the **"service not running"** state, without data. Because the post-install health check failed, the dashboard was opened by setting `installed: true` in `config.json` by hand.
+These images were recovered from the still-unmerged `docs/bilingual-readme` branch and visually confirmed as the real product UI at **v1.3.0**. The environment-check shot shows a Linux data path under `/tmp/ocd-home/`, so it is not a post-Windows-install capture. The home shot shows a failed service start (`fetch failed`). The remember-note field on the home screen contains the product's own example placeholder text; that text is not a real credential and is not quoted here. This repository does have published v1.3.0 installers (see the download table below).
 
-| First run: environment check | First run: installing |
+| First-run environment check (v1.3.0) | Home (service start failed) |
 | --- | --- |
-| **Home (service not running)** | **AI connection: MCP config & tokens** |
-| **Settings** | **Service status** |
+| ![OpenContext env check](docs/screenshots/setup-check.png) | ![OpenContext home](docs/screenshots/dashboard-home.png) |
 
 ## Tech stack
 
