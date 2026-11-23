@@ -18,14 +18,30 @@ A one-click desktop client for **OpenContext**, a local memory store that runs e
 - **Advanced tools**: service status, API console (`POST /v1/raw-messages`, `POST /v1/search`, `GET /v1/raw-messages/:id`), embedded web page and live logs.
 - **Updates**: `electron-updater` against GitHub Releases (check, download, restart and install).
 
-## Screenshots
+## Download
 
-These were captured on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in this test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`. So the control-panel screenshots show the real UI in the **"service not running"** state, without data. Because the post-install health check failed, the dashboard was opened by setting `installed: true` in `config.json` by hand.
+Current installers are on [GitHub Releases v1.3.0](https://github.com/gatesenman/opencontext-desktop/releases/tag/v1.3.0). Exact names:
 
-| First run: environment check | First run: installing |
+| Platform | File |
 | --- | --- |
-| **Home (service not running)** | **AI connection: MCP config & tokens** |
-| **Settings** | **Service status** |
+| Windows | [OpenContext-Desktop-1.3.0-win-x64.exe](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-win-x64.exe) |
+| Linux | [OpenContext-Desktop-1.3.0-linux-x86_64.AppImage](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-linux-x86_64.AppImage) / [OpenContext-Desktop-1.3.0-linux-amd64.deb](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-linux-amd64.deb) |
+| macOS | [OpenContext-Desktop-1.3.0-mac-x64.dmg](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-mac-x64.dmg) / [OpenContext-Desktop-1.3.0-mac-arm64.dmg](https://github.com/gatesenman/opencontext-desktop/releases/download/v1.3.0/OpenContext-Desktop-1.3.0-mac-arm64.dmg) (zip variants also exist) |
+
+This pass did not download those binaries to compute SHA256. Ignore `.blockmap` and `latest-*.yml` when choosing what to install.
+
+## Screenshots (files missing; paths reserved)
+
+Earlier documentation described captures taken on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in that test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`, and the dashboard was opened by setting `installed: true` in `config.json` by hand. Those image files are **not in this repository** (only `build/icon.png` and `src/assets/tray.png` exist), so they are not embedded and no placeholder graphic is used.
+
+Please recapture the real UI and add:
+
+- `docs/screenshots/01-env-check.png` — first run, environment check
+- `docs/screenshots/02-installing.png` — first run, installing
+- `docs/screenshots/03-home.png` — home / control panel (state the service status in the caption)
+- `docs/screenshots/04-settings-or-status.png` — settings or service status, with tokens/keys masked
+
+Start with `npm ci && npm start` (Node 20, Electron).
 
 ## Tech stack
 

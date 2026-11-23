@@ -20,14 +20,22 @@ OpenContext 桌面版：一键安装、开箱可用的本机记忆库客户端�
 - **高级功能**：服务状态、接口调试（`POST /v1/raw-messages`、`POST /v1/search`、`GET /v1/raw-messages/:id`）、内嵌页面、运行日志。
 - **自动更新**：基于 `electron-updater` 和 GitHub Releases（检查、下载、重启安装）。
 
-## 截图
+## 下载
 
-以下截图是在 Linux 上用 Xvfb 启动真实的 Electron 应用、由 Playwright 操作后拍下的。首次安装确实完成了运行时的下载和安装，但在本测试环境中，OpenContext 服务（`@melandlabs/opencontext` 0.13.7）启动时以 `SIGSEGV` 崩溃，所以控制面板截图展示的是真实界面在**「服务未运行」**状态下的样子，没有数据。由于安装后的健康检查失败，进入控制面板是手动把 `config.json` 中的 `installed` 设为 `true` 实现的。
+当前安装包在 [GitHub Releases v1.3.0](https://github.com/gatesenman/opencontext-desktop/releases/tag/v1.3.0)，确切文件名包括 `OpenContext-Desktop-1.3.0-win-x64.exe`、`OpenContext-Desktop-1.3.0-linux-x86_64.AppImage`、`OpenContext-Desktop-1.3.0-linux-amd64.deb`、`OpenContext-Desktop-1.3.0-mac-x64.dmg`、`OpenContext-Desktop-1.3.0-mac-arm64.dmg`（另有 zip）。本轮未下载二进制计算 SHA256。选择安装包时请忽略 `.blockmap` 与 `latest-*.yml`。
 
-| 首次启动：环境检测 | 首次启动：安装中 |
-| --- | --- |
-| **首页（服务未运行）** | **AI 连接：MCP 配置与令牌** |
-| **设置** | **服务状态** |
+## 界面截图（文件缺失，路径已预留）
+
+先前文档描述过在 Linux 上用 Xvfb 启动真实 Electron、由 Playwright 操作拍摄的画面，以及服务 `SIGSEGV`、「服务未运行」、手动改 `config.json` 等限制。但这些图片文件**并不在本仓库中**（只有图标），因此不嵌入，也不用假图占位。
+
+请重新实拍并放入：
+
+- `docs/screenshots/01-env-check.png` — 首次启动，环境检测
+- `docs/screenshots/02-installing.png` — 首次启动，安装中
+- `docs/screenshots/03-home.png` — 首页/控制面板（图注写明服务状态）
+- `docs/screenshots/04-settings-or-status.png` — 设置或服务状态（遮盖令牌/密钥）
+
+启动：`npm ci && npm start`（Node 20，Electron）。
 
 ## 技术栈
 
