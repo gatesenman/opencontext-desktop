@@ -30,18 +30,13 @@ Current installers are on [GitHub Releases v1.3.0](https://github.com/gatesenman
 
 This pass did not download those binaries to compute SHA256. Ignore `.blockmap` and `latest-*.yml` when choosing what to install.
 
-## Screenshots (files missing; paths reserved)
+## Screenshots
 
-Earlier documentation described captures taken on Linux by launching the real Electron app under Xvfb and driving it with Playwright. The first-run install really did download and install the runtime, but in that test environment the OpenContext daemon (`@melandlabs/opencontext` 0.13.7) crashed on start with `SIGSEGV`, and the dashboard was opened by setting `installed: true` in `config.json` by hand. Those image files are **not in this repository** (only `build/icon.png` and `src/assets/tray.png` exist), so they are not embedded and no placeholder graphic is used.
+These images were recovered from the still-unmerged `docs/bilingual-readme` branch and visually confirmed as the real product UI at **v1.3.0**. The environment-check shot shows a Linux data path under `/tmp/ocd-home/`, so it is not a post-Windows-install capture. The home shot shows a failed service start (`fetch failed`). The remember-note field on the home screen contains the product's own example placeholder text; that text is not a real credential and is not quoted here. This repository does have published v1.3.0 installers (see the download table below).
 
-Please recapture the real UI and add:
-
-- `docs/screenshots/01-env-check.png` — first run, environment check
-- `docs/screenshots/02-installing.png` — first run, installing
-- `docs/screenshots/03-home.png` — home / control panel (state the service status in the caption)
-- `docs/screenshots/04-settings-or-status.png` — settings or service status, with tokens/keys masked
-
-Start with `npm ci && npm start` (Node 20, Electron).
+| First-run environment check (v1.3.0) | Home (service start failed) |
+| --- | --- |
+| ![OpenContext env check](docs/screenshots/setup-check.png) | ![OpenContext home](docs/screenshots/dashboard-home.png) |
 
 ## Tech stack
 
